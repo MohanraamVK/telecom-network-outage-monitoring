@@ -2,8 +2,6 @@ package com.telecom.network_monitor.service;
 
 import com.telecom.network_monitor.entity.Node;
 import com.telecom.network_monitor.repository.NodeRepository;
-
-import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -17,25 +15,28 @@ public class NodeService {
         this.nodeRepository = nodeRepository;
     }
 
-    public Node save(Node node) {
+    public Node createNode(Node node) {
         return nodeRepository.save(node);
     }
 
-    public List<Node> findAll() {
+    public List<Node> getAllNodes() {
         return nodeRepository.findAll();
     }
 
-    public Node findById(Long id) {
+    public Node getNodeById(Long id) {
         return nodeRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Node not found"));
     }
 
-    public void delete(Long id) {
-        nodeRepository.deleteById(id);
+    public Node updateNode(Long id, Node updatedNode) {
+        Node existing = getNodeById(id);
+        existing.setName(updatedNode.getName());
+        existing.setLocation(updatedNode.getLocation());
+        existing.setStatus(updatedNode.getStatus());
+        return nodeRepository.save(existing);
     }
 
-    public @Nullable Object updateNode(Long id, Node node) {
-        // TODO Auto-generated method stub
-        throw new UnsupportedOperationException("Unimplemented method 'updateNode'");
+    public void deleteNode(Long id) {
+        nodeRepository.deleteById(id);
     }
 }
