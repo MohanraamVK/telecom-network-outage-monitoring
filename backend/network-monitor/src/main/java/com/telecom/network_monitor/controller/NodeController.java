@@ -1,6 +1,6 @@
 package com.telecom.network_monitor.controller;
 
-import com.telecom.network_monitor.entity.Node;
+import com.telecom.network_monitor.dto.NodeDTO;
 import com.telecom.network_monitor.service.NodeService;
 import org.springframework.web.bind.annotation.*;
 
@@ -17,23 +17,22 @@ public class NodeController {
     }
 
     @PostMapping
-    public Node createNode(@RequestBody Node node) {
-        return nodeService.createNode(node);
+    public NodeDTO createNode(@RequestBody NodeDTO dto) {
+        return nodeService.createNode(dto);
     }
 
     @GetMapping
-    public List<Node> getAllNodes() {
+    public List<NodeDTO> getAllNodes() {
         return nodeService.getAllNodes();
     }
 
-    @PutMapping("/{id}")
-    public Node updateNode(@PathVariable Long id,
-                           @RequestBody Node node) {
-        return nodeService.updateNode(id, node);
+    @GetMapping("/{id}")
+    public NodeDTO getNodeById(@PathVariable Long id) {
+        return nodeService.getNodeById(id);
     }
 
-    @DeleteMapping("/{id}")
-    public void deleteNode(@PathVariable Long id) {
-        nodeService.deleteNode(id);
+    @PutMapping("/{id}")
+    public NodeDTO updateNode(@PathVariable Long id, @RequestBody NodeDTO dto) {
+        return nodeService.updateNode(id, dto);
     }
 }

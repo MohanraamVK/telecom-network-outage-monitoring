@@ -1,6 +1,7 @@
 package com.telecom.network_monitor.controller;
 
-import com.telecom.network_monitor.entity.Incident;
+import com.telecom.network_monitor.dto.IncidentDTO;
+import com.telecom.network_monitor.dto.IncidentStatusUpdateDTO;
 import com.telecom.network_monitor.service.IncidentService;
 import org.springframework.web.bind.annotation.*;
 
@@ -17,13 +18,25 @@ public class IncidentController {
     }
 
     @PostMapping("/node/{nodeId}")
-    public Incident createIncident(@PathVariable Long nodeId,
-                                   @RequestBody Incident incident) {
-        return incidentService.createIncident(nodeId, incident);
+    public IncidentDTO createIncident(@PathVariable Long nodeId,
+                                      @RequestBody IncidentDTO dto) {
+        return incidentService.createIncident(nodeId, dto);
+    }
+
+    @GetMapping
+    public List<IncidentDTO> getAllIncidents(
+            @RequestParam(required = false) String status) {
+        return incidentService.getAllIncidents(status);
     }
 
     @GetMapping("/node/{nodeId}")
-    public List<Incident> getIncidentsByNode(@PathVariable Long nodeId) {
+    public List<IncidentDTO> getIncidentsByNode(@PathVariable Long nodeId) {
         return incidentService.getIncidentsByNode(nodeId);
+    }
+
+    @PutMapping("/{id}/status")
+    public IncidentDTO updateIncidentStatus(@PathVariable Long id,
+                                        @RequestBody IncidentStatusUpdateDTO statusDTO) {
+        return incidentService.updateIncidentStatus(id, statusDTO.getStatus());
     }
 }
