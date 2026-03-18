@@ -1,14 +1,17 @@
 package com.telecom.network_monitor.service;
 
 import com.telecom.network_monitor.dto.IncidentDTO;
+import com.telecom.network_monitor.dto.IncidentRequestDTO;
 import com.telecom.network_monitor.entity.Incident;
 import com.telecom.network_monitor.entity.Node;
+import com.telecom.network_monitor.enums.IncidentSeverity;
+import com.telecom.network_monitor.enums.IncidentStatus;
+import com.telecom.network_monitor.exception.ResourceNotFoundException;
 import com.telecom.network_monitor.repository.IncidentRepository;
 import com.telecom.network_monitor.repository.NodeRepository;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
-import java.util.stream.Collectors;
 
 @Service
 public class IncidentService {
@@ -21,72 +24,116 @@ public class IncidentService {
         this.nodeRepository = nodeRepository;
     }
 
-    public IncidentDTO createIncident(Long nodeId, IncidentDTO dto) {
-
+    public IncidentDTO createIncident(Long nodeId, IncidentRequestDTO dto) {
         Node node = nodeRepository.findById(nodeId)
-                .orElseThrow(() -> new RuntimeException("Node not found"));
+                .filter(n -> !n.isDeleted())
+                .orElseThrow(() -> new ResourceNotFoundException("Node not found or is deleted with id: " + nodeId));
 
         Incident incident = new Incident();
         incident.setDescription(dto.getDescription());
-        incident.setSeverity(dto.getSeverity());
-        incident.setStatus(dto.getStatus());
+        incident.setSeverity(parseIncidentSeverity(dto.getSeverity()));
+        incident.setStatus(parseIncidentStatus(dto.getStatus()));
         incident.setNode(node);
+        incident.setDeleted(false);
 
         Incident saved = incidentRepository.save(incident);
-
-        return new IncidentDTO(
-                saved.getId(),
-                saved.getDescription(),
-                saved.getSeverity(),
-                saved.getStatus()
-        );
+        return convertToDTO(saved);
     }
 
-    // UPDATE INCIDENT STATUS
     public IncidentDTO updateIncidentStatus(Long incidentId, String newStatus) {
-
         Incident incident = incidentRepository.findById(incidentId)
-                .orElseThrow(() -> new RuntimeException("Incident not found with id: " + incidentId));
+                .filter(i -> !i.isDeleted())
+                .orElseThrow(() -> new ResourceNotFoundException("Incident not found with id: " + incidentId));
 
-        incident.setStatus(newStatus);
-
+        incident.setStatus(parseIncidentStatus(newStatus));
         Incident updated = incidentRepository.save(incident);
 
-        return new IncidentDTO(
-                updated.getId(),
-                updated.getDescription(),
-                updated.getSeverity(),
-                updated.getStatus()
-        );
+        return convertToDTO(updated);
     }
 
-    // GET ALL INCIDENTS
-    public List<IncidentDTO> getAllIncidents(String status) {
+    public List<IncidentDTO> getAllIncidents(IncidentStatus status) {
         List<Incident> incidents;
-        if (status != null && !status.isEmpty()) {
-            incidents = incidentRepository.findByStatus(status);
+
+        if (status != null) {
+            incidents = incidentRepository.findByStatusAndDeletedFalse(status);
         } else {
-            incidents = incidentRepository.findAll();
+            incidents = incidentRepository.findByDeletedFalse();
         }
+
         return incidents.stream()
-                .map(incident -> new IncidentDTO(
-                        incident.getId(),
-                        incident.getDescription(),
-                        incident.getSeverity(),
-                        incident.getStatus()
-                ))
+                .map(this::convertToDTO)
+                .toList();
+    }
+
+    public List<IncidentDTO> getDeletedIncidents() {
+        return incidentRepository.findByDeletedTrue()
+                .stream()
+                .map(this::convertToDTO)
                 .toList();
     }
 
     public List<IncidentDTO> getIncidentsByNode(Long nodeId) {
-        return incidentRepository.findByNodeId(nodeId)
+        return incidentRepository.findByNodeIdAndDeletedFalse(nodeId)
                 .stream()
-                .map(i -> new IncidentDTO(
-                        i.getId(),
-                        i.getDescription(),
-                        i.getSeverity(),
-                        i.getStatus()
-                ))
-                .collect(Collectors.toList());
+                .map(this::convertToDTO)
+                .toList();
+    }
+
+    public String deleteIncident(Long incidentId) {
+        Incident incident = incidentRepository.findById(incidentId)
+                .orElseThrow(() -> new ResourceNotFoundException("Incident not found with id: " + incidentId));
+
+        if (incident.isDeleted()) {
+            return "Incident already deleted";
+        }
+
+        incident.setDeleted(true);
+        incidentRepository.save(incident);
+
+        return "Incident soft deleted successfully!";
+    }
+
+    public String restoreIncident(Long incidentId) {
+        Incident incident = incidentRepository.findById(incidentId)
+                .orElseThrow(() -> new ResourceNotFoundException("Incident not found with id: " + incidentId));
+
+        if (!incident.isDeleted()) {
+            return "Incident is already active";
+        }
+
+        if (incident.getNode() != null && incident.getNode().isDeleted()) {
+            return "Cannot restore incident because parent node is still deleted";
+        }
+
+        incident.setDeleted(false);
+        incidentRepository.save(incident);
+
+        return "Incident restored successfully!";
+    }
+
+    private IncidentSeverity parseIncidentSeverity(String severity) {
+        try {
+            return IncidentSeverity.valueOf(severity.toUpperCase());
+        } catch (IllegalArgumentException ex) {
+            throw new RuntimeException("Invalid severity. Allowed values: LOW, MEDIUM, HIGH, CRITICAL");
+        }
+    }
+
+    private IncidentStatus parseIncidentStatus(String status) {
+        try {
+            return IncidentStatus.valueOf(status.toUpperCase());
+        } catch (IllegalArgumentException ex) {
+            throw new RuntimeException("Invalid status. Allowed values: OPEN, IN_PROGRESS, RESOLVED, CLOSED");
+        }
+    }
+
+    private IncidentDTO convertToDTO(Incident incident) {
+        return new IncidentDTO(
+                incident.getId(),
+                incident.getDescription(),
+                incident.getSeverity(),
+                incident.getStatus(),
+                incident.isDeleted()
+        );
     }
 }

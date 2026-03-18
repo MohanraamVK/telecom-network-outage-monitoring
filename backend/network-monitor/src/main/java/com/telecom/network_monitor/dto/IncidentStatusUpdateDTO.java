@@ -1,7 +1,10 @@
 package com.telecom.network_monitor.dto;
 
+import jakarta.validation.constraints.NotBlank;
+
 public class IncidentStatusUpdateDTO {
 
+    @NotBlank(message = "Status is required")
     private String status;
 
     public IncidentStatusUpdateDTO() {

@@ -1,9 +1,8 @@
 package com.telecom.network_monitor.entity;
 
+import com.telecom.network_monitor.enums.IncidentSeverity;
+import com.telecom.network_monitor.enums.IncidentStatus;
 import jakarta.persistence.*;
-import java.time.LocalDateTime;
-
-import com.fasterxml.jackson.annotation.JsonBackReference;
 
 @Entity
 @Table(name = "incidents")
@@ -14,17 +13,21 @@ public class Incident {
     private Long id;
 
     private String description;
-    private String severity;
-    private String status;
 
-    private LocalDateTime reportedAt = LocalDateTime.now();
+    @Enumerated(EnumType.STRING)
+    private IncidentSeverity severity;
+
+    @Enumerated(EnumType.STRING)
+    private IncidentStatus status;
+
+    private boolean deleted = false;
 
     @ManyToOne
-    @JoinColumn(name = "node_id")
-    @JsonBackReference
+    @JoinColumn(name = "node_id", nullable = false)
     private Node node;
 
-    // ===== GETTERS =====
+    public Incident() {
+    }
 
     public Long getId() {
         return id;
@@ -34,23 +37,21 @@ public class Incident {
         return description;
     }
 
-    public String getSeverity() {
+    public IncidentSeverity getSeverity() {
         return severity;
     }
 
-    public String getStatus() {
+    public IncidentStatus getStatus() {
         return status;
     }
 
-    public LocalDateTime getReportedAt() {
-        return reportedAt;
+    public boolean isDeleted() {
+        return deleted;
     }
 
     public Node getNode() {
         return node;
     }
-
-    // ===== SETTERS =====
 
     public void setId(Long id) {
         this.id = id;
@@ -60,16 +61,16 @@ public class Incident {
         this.description = description;
     }
 
-    public void setSeverity(String severity) {
+    public void setSeverity(IncidentSeverity severity) {
         this.severity = severity;
     }
 
-    public void setStatus(String status) {
+    public void setStatus(IncidentStatus status) {
         this.status = status;
     }
 
-    public void setReportedAt(LocalDateTime reportedAt) {
-        this.reportedAt = reportedAt;
+    public void setDeleted(boolean deleted) {
+        this.deleted = deleted;
     }
 
     public void setNode(Node node) {

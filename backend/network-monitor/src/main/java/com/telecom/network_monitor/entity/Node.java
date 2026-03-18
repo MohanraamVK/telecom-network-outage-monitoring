@@ -1,9 +1,9 @@
 package com.telecom.network_monitor.entity;
 
+import com.telecom.network_monitor.enums.NodeStatus;
 import jakarta.persistence.*;
-import java.util.List;
 
-import com.fasterxml.jackson.annotation.JsonManagedReference;
+import java.util.List;
 
 @Entity
 @Table(name = "nodes")
@@ -13,16 +13,19 @@ public class Node {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "node_name", nullable = false)
     private String name;
     private String location;
-    private String status;
 
-    @OneToMany(mappedBy = "node", cascade = CascadeType.ALL)
-    @JsonManagedReference
+    @Enumerated(EnumType.STRING)
+    private NodeStatus status;
+
+    private boolean deleted = false;
+
+    @OneToMany(mappedBy = "node", fetch = FetchType.LAZY)
     private List<Incident> incidents;
 
-    // ===== GETTERS =====
+    public Node() {
+    }
 
     public Long getId() {
         return id;
@@ -36,15 +39,17 @@ public class Node {
         return location;
     }
 
-    public String getStatus() {
+    public NodeStatus getStatus() {
         return status;
+    }
+
+    public boolean isDeleted() {
+        return deleted;
     }
 
     public List<Incident> getIncidents() {
         return incidents;
     }
-
-    // ===== SETTERS =====
 
     public void setId(Long id) {
         this.id = id;
@@ -58,8 +63,12 @@ public class Node {
         this.location = location;
     }
 
-    public void setStatus(String status) {
+    public void setStatus(NodeStatus status) {
         this.status = status;
+    }
+
+    public void setDeleted(boolean deleted) {
+        this.deleted = deleted;
     }
 
     public void setIncidents(List<Incident> incidents) {
