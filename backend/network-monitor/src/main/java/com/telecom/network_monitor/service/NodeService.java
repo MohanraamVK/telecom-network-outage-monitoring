@@ -166,7 +166,7 @@ public class NodeService {
                 incident.getDescription(),
                 incident.getSeverity(),
                 incident.getStatus(),
-                incident.isDeleted()
+                null, null, incident.isDeleted()
         );
     }
 }

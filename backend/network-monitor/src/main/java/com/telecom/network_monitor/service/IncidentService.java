@@ -147,6 +147,8 @@ public class IncidentService {
                 incident.getDescription(),
                 incident.getSeverity(),
                 incident.getStatus(),
+                incident.getNode() != null ? incident.getNode().getId() : null,
+                incident.getNode() != null ? incident.getNode().getName() : null,
                 incident.isDeleted()
         );
     }
