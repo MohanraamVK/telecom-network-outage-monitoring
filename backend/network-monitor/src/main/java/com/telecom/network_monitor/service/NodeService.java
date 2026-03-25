@@ -8,6 +8,8 @@ import com.telecom.network_monitor.entity.Node;
 import com.telecom.network_monitor.enums.NodeStatus;
 import com.telecom.network_monitor.exception.ResourceNotFoundException;
 import com.telecom.network_monitor.repository.NodeRepository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -38,6 +40,11 @@ public class NodeService {
                 .stream()
                 .map(this::convertToDTO)
                 .collect(Collectors.toList());
+    }
+
+    public Page<NodeDTO> getAllNodesPaginated(Pageable pageable) {
+        return nodeRepository.findByDeletedFalse(pageable)
+                .map(this::convertToDTO);
     }
 
     public List<NodeDTO> getDeletedNodes() {

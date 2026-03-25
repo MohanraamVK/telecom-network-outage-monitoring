@@ -9,6 +9,8 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
 import jakarta.validation.Valid;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -45,41 +47,31 @@ public class NodeController {
     )
     @PostMapping
     public ApiResponse<NodeDTO> createNode(@Valid @RequestBody NodeRequestDTO dto) {
-        return new ApiResponse<>(
-                true,
-                "Node created successfully",
-                nodeService.createNode(dto)
-        );
+        return new ApiResponse<>(true, "Node created successfully", nodeService.createNode(dto));
     }
 
     @Operation(summary = "Get all active nodes")
     @GetMapping
     public ApiResponse<List<NodeDTO>> getAllNodes() {
-        return new ApiResponse<>(
-                true,
-                "Active nodes fetched successfully",
-                nodeService.getAllNodes()
-        );
+        return new ApiResponse<>(true, "Active nodes fetched successfully", nodeService.getAllNodes());
+    }
+
+    @Operation(summary = "Get active nodes with pagination")
+    @GetMapping("/paged")
+    public ApiResponse<Page<NodeDTO>> getAllNodesPaginated(Pageable pageable) {
+        return new ApiResponse<>(true, "Paginated active nodes fetched successfully", nodeService.getAllNodesPaginated(pageable));
     }
 
     @Operation(summary = "Get all soft deleted nodes")
     @GetMapping("/deleted")
     public ApiResponse<List<NodeDTO>> getDeletedNodes() {
-        return new ApiResponse<>(
-                true,
-                "Deleted nodes fetched successfully",
-                nodeService.getDeletedNodes()
-        );
+        return new ApiResponse<>(true, "Deleted nodes fetched successfully", nodeService.getDeletedNodes());
     }
 
     @Operation(summary = "Get node by ID")
     @GetMapping("/{id}")
     public ApiResponse<NodeDTO> getNodeById(@PathVariable Long id) {
-        return new ApiResponse<>(
-                true,
-                "Node fetched successfully",
-                nodeService.getNodeById(id)
-        );
+        return new ApiResponse<>(true, "Node fetched successfully", nodeService.getNodeById(id));
     }
 
     @Operation(
@@ -102,32 +94,19 @@ public class NodeController {
             )
     )
     @PutMapping("/{id}")
-    public ApiResponse<NodeDTO> updateNode(@PathVariable Long id,
-                                           @Valid @RequestBody NodeRequestDTO dto) {
-        return new ApiResponse<>(
-                true,
-                "Node updated successfully",
-                nodeService.updateNode(id, dto)
-        );
+    public ApiResponse<NodeDTO> updateNode(@PathVariable Long id, @Valid @RequestBody NodeRequestDTO dto) {
+        return new ApiResponse<>(true, "Node updated successfully", nodeService.updateNode(id, dto));
     }
 
     @Operation(summary = "Soft delete node by ID", description = "Marks a node and its related incidents as deleted")
     @DeleteMapping("/{id}")
     public ApiResponse<Object> deleteNode(@PathVariable Long id) {
-        return new ApiResponse<>(
-                true,
-                nodeService.deleteNode(id),
-                null
-        );
+        return new ApiResponse<>(true, nodeService.deleteNode(id), null);
     }
 
     @Operation(summary = "Restore soft deleted node by ID", description = "Restores a soft deleted node and its related incidents")
     @PutMapping("/{id}/restore")
     public ApiResponse<Object> restoreNode(@PathVariable Long id) {
-        return new ApiResponse<>(
-                true,
-                nodeService.restoreNode(id),
-                null
-        );
+        return new ApiResponse<>(true, nodeService.restoreNode(id), null);
     }
 }

@@ -9,6 +9,8 @@ import com.telecom.network_monitor.enums.IncidentStatus;
 import com.telecom.network_monitor.exception.ResourceNotFoundException;
 import com.telecom.network_monitor.repository.IncidentRepository;
 import com.telecom.network_monitor.repository.NodeRepository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -63,6 +65,18 @@ public class IncidentService {
         return incidents.stream()
                 .map(this::convertToDTO)
                 .toList();
+    }
+
+    public Page<IncidentDTO> getAllIncidentsPaginated(IncidentStatus status, Pageable pageable) {
+        Page<Incident> incidents;
+
+        if (status != null) {
+            incidents = incidentRepository.findByStatusAndDeletedFalse(status, pageable);
+        } else {
+            incidents = incidentRepository.findByDeletedFalse(pageable);
+        }
+
+        return incidents.map(this::convertToDTO);
     }
 
     public List<IncidentDTO> getDeletedIncidents() {
