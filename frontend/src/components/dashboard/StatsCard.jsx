@@ -1,27 +1,36 @@
-function StatsCard({ title, value }) {
+function StatsCard({ title, value, subtitle }) {
   return (
     <div style={styles.card}>
-      <h3 style={styles.title}>{title}</h3>
-      <p style={styles.value}>{value}</p>
+      <p style={styles.title}>{title}</p>
+      <h2 style={styles.value}>{value}</h2>
+      {subtitle ? <p style={styles.subtitle}>{subtitle}</p> : null}
     </div>
   );
 }
 
 const styles = {
   card: {
-    background: "#fff",
+    backgroundColor: "#ffffff",
+    borderRadius: "12px",
     padding: "20px",
-    borderRadius: "10px",
     boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+    minHeight: "120px",
   },
   title: {
-    margin: "0 0 10px 0",
-    fontSize: "18px",
+    margin: 0,
+    fontSize: "14px",
+    color: "#6b7280",
+    fontWeight: "600",
   },
   value: {
+    margin: "12px 0 8px 0",
+    fontSize: "32px",
+    color: "#111827",
+  },
+  subtitle: {
     margin: 0,
-    fontSize: "28px",
-    fontWeight: "bold",
+    fontSize: "13px",
+    color: "#9ca3af",
   },
 };
 

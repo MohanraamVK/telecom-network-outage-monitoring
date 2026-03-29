@@ -5,6 +5,31 @@ function NodeTable({
   onRestoreNode,
   showDeleted,
 }) {
+  const getStatusStyle = (status) => {
+    switch (status) {
+      case "ACTIVE":
+        return {
+          backgroundColor: "#E8F5E9",
+          color: "#2E7D32",
+        };
+      case "DOWN":
+        return {
+          backgroundColor: "#FFEBEE",
+          color: "#C62828",
+        };
+      case "MAINTENANCE":
+        return {
+          backgroundColor: "#FFF3E0",
+          color: "#EF6C00",
+        };
+      default:
+        return {
+          backgroundColor: "#F3F4F6",
+          color: "#374151",
+        };
+    }
+  };
+
   if (!Array.isArray(nodes) || nodes.length === 0) {
     return <p>{showDeleted ? "No deleted nodes found." : "No active nodes found."}</p>;
   }
@@ -30,7 +55,18 @@ function NodeTable({
               <td style={styles.td}>{node.id}</td>
               <td style={styles.td}>{node.name || "-"}</td>
               <td style={styles.td}>{node.location || "-"}</td>
-              <td style={styles.td}>{node.status || "-"}</td>
+
+              <td style={styles.td}>
+                <span
+                  style={{
+                    ...styles.badge,
+                    ...getStatusStyle(node.status),
+                  }}
+                >
+                  {node.status || "-"}
+                </span>
+              </td>
+
               <td style={styles.td}>
                 <div style={styles.actionButtons}>
                   {!showDeleted ? (
@@ -87,6 +123,14 @@ const styles = {
   td: {
     borderBottom: "1px solid #eee",
     padding: "10px",
+    verticalAlign: "middle",
+  },
+  badge: {
+    padding: "6px 10px",
+    borderRadius: "12px",
+    fontSize: "12px",
+    fontWeight: "600",
+    display: "inline-block",
   },
   actionButtons: {
     display: "flex",
@@ -94,7 +138,7 @@ const styles = {
     flexWrap: "wrap",
   },
   editButton: {
-    backgroundColor: "#1565c0",
+    backgroundColor: "#1565C0",
     color: "#fff",
     border: "none",
     padding: "8px 12px",
@@ -102,7 +146,7 @@ const styles = {
     cursor: "pointer",
   },
   deleteButton: {
-    backgroundColor: "#c62828",
+    backgroundColor: "#C62828",
     color: "#fff",
     border: "none",
     padding: "8px 12px",
@@ -110,7 +154,7 @@ const styles = {
     cursor: "pointer",
   },
   restoreButton: {
-    backgroundColor: "#2e7d32",
+    backgroundColor: "#2E7D32",
     color: "#fff",
     border: "none",
     padding: "8px 12px",

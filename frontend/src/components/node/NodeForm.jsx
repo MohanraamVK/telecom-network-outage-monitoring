@@ -1,15 +1,48 @@
 import { useState } from "react";
+import FormField from "../common/FormField";
 
-function NodeForm({ onAddNode, onUpdateNode, editingNode, onCancelEdit }) {
+function NodeForm({
+  onAddNode,
+  onUpdateNode,
+  editingNode,
+  onCancelEdit,
+}) {
   const [formData, setFormData] = useState({
     name: editingNode?.name || "",
     location: editingNode?.location || "",
-    status: editingNode?.status || "",
+    status: editingNode?.status || "ACTIVE",
   });
 
-  const [error, setError] = useState("");
+  const [formError, setFormError] = useState("");
+
+  const getStatusStyle = (status) => {
+    switch (status) {
+      case "ACTIVE":
+        return {
+          backgroundColor: "#E8F5E9",
+          color: "#2E7D32",
+        };
+      case "DOWN":
+        return {
+          backgroundColor: "#FFEBEE",
+          color: "#C62828",
+        };
+      case "MAINTENANCE":
+        return {
+          backgroundColor: "#FFF3E0",
+          color: "#EF6C00",
+        };
+      default:
+        return {
+          backgroundColor: "#FFFFFF",
+          color: "#111827",
+        };
+    }
+  };
 
   const handleChange = (event) => {
+    setFormError("");
+
     const { name, value } = event.target;
 
     setFormData((prev) => ({
@@ -20,10 +53,10 @@ function NodeForm({ onAddNode, onUpdateNode, editingNode, onCancelEdit }) {
 
   const handleSubmit = async (event) => {
     event.preventDefault();
-    setError("");
+    setFormError("");
 
-    if (!formData.name.trim() || !formData.location.trim() || !formData.status.trim()) {
-      setError("All fields are required.");
+    if (!formData.name.trim() || !formData.location.trim()) {
+      setFormError("Name and Location are required.");
       return;
     }
 
@@ -32,59 +65,79 @@ function NodeForm({ onAddNode, onUpdateNode, editingNode, onCancelEdit }) {
         await onUpdateNode(editingNode.id, formData);
       } else {
         await onAddNode(formData);
+
         setFormData({
           name: "",
           location: "",
-          status: "",
+          status: "ACTIVE",
         });
       }
-    } catch (err) {
-      console.error("Node form error:", err);
+    } catch (error) {
+      console.error("Node form error:", error);
 
-      if (err.response?.data?.message) {
-        setError(err.response.data.message);
-      } else if (err.response?.data) {
-        setError(JSON.stringify(err.response.data));
+      if (error.response?.data?.message) {
+        setFormError(error.response.data.message);
       } else {
-        setError(editingNode ? "Failed to update node." : "Failed to create node.");
+        setFormError(
+          editingNode ? "Failed to update node." : "Failed to add node."
+        );
       }
     }
   };
 
   return (
-    <div style={styles.formContainer}>
-      <h3>{editingNode ? "Edit Node" : "Add Node"}</h3>
+    <div style={styles.container}>
+      <div style={styles.header}>
+        <h3 style={styles.title}>
+          {editingNode ? "Edit Node" : "Add New Node"}
+        </h3>
+        <p style={styles.subtitle}>
+          Enter the node details below.
+        </p>
+      </div>
+
+      {formError && <p style={styles.error}>{formError}</p>}
 
       <form onSubmit={handleSubmit} style={styles.form}>
-        <input
-          type="text"
-          name="name"
-          placeholder="Enter node name"
-          value={formData.name}
-          onChange={handleChange}
-          style={styles.input}
-        />
+        <div style={styles.fieldsGrid}>
+          <FormField label="Node Name" required>
+            <input
+              type="text"
+              name="name"
+              placeholder="Enter node name"
+              value={formData.name}
+              onChange={handleChange}
+              style={styles.input}
+            />
+          </FormField>
 
-        <input
-          type="text"
-          name="location"
-          placeholder="Enter location"
-          value={formData.location}
-          onChange={handleChange}
-          style={styles.input}
-        />
+          <FormField label="Location" required>
+            <input
+              type="text"
+              name="location"
+              placeholder="Enter location"
+              value={formData.location}
+              onChange={handleChange}
+              style={styles.input}
+            />
+          </FormField>
 
-        <select
-          name="status"
-          value={formData.status}
-          onChange={handleChange}
-          style={styles.input}
-        >
-          <option value="">Select status</option>
-          <option value="ACTIVE">ACTIVE</option>
-          <option value="DOWN">DOWN</option>
-          <option value="MAINTENANCE">MAINTENANCE</option>
-        </select>
+          <FormField label="Node Status" required>
+            <select
+              name="status"
+              value={formData.status}
+              onChange={handleChange}
+              style={{
+                ...styles.select,
+                ...getStatusStyle(formData.status),
+              }}
+            >
+              <option value="ACTIVE">ACTIVE</option>
+              <option value="DOWN">DOWN</option>
+              <option value="MAINTENANCE">MAINTENANCE</option>
+            </select>
+          </FormField>
+        </div>
 
         <div style={styles.buttonRow}>
           <button type="submit" style={styles.primaryButton}>
@@ -92,63 +145,95 @@ function NodeForm({ onAddNode, onUpdateNode, editingNode, onCancelEdit }) {
           </button>
 
           {editingNode && (
-            <button type="button" onClick={onCancelEdit} style={styles.secondaryButton}>
+            <button
+              type="button"
+              onClick={onCancelEdit}
+              style={styles.secondaryButton}
+            >
               Cancel
             </button>
           )}
         </div>
-
-        {error && <p style={styles.error}>{error}</p>}
       </form>
     </div>
   );
 }
 
 const styles = {
-  formContainer: {
+  container: {
     background: "#fff",
-    padding: "20px",
-    borderRadius: "10px",
+    padding: "24px",
+    borderRadius: "12px",
     boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
     marginBottom: "20px",
+  },
+  header: {
+    marginBottom: "16px",
+  },
+  title: {
+    margin: 0,
+    fontSize: "20px",
+    color: "#111827",
+  },
+  subtitle: {
+    margin: "6px 0 0 0",
+    color: "#6B7280",
+    fontSize: "14px",
   },
   form: {
     display: "flex",
     flexDirection: "column",
-    gap: "12px",
+    gap: "18px",
+  },
+  fieldsGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+    gap: "16px",
   },
   input: {
-    padding: "10px",
+    width: "100%",
+    padding: "10px 12px",
+    borderRadius: "8px",
+    border: "1px solid #d1d5db",
     fontSize: "14px",
-    borderRadius: "6px",
-    border: "1px solid #ccc",
+    backgroundColor: "#fff",
+  },
+  select: {
+    width: "100%",
+    padding: "10px 12px",
+    borderRadius: "8px",
+    border: "1px solid #d1d5db",
+    fontSize: "14px",
+    fontWeight: "600",
   },
   buttonRow: {
     display: "flex",
     gap: "10px",
+    flexWrap: "wrap",
   },
   primaryButton: {
-    flex: 1,
-    padding: "10px",
-    fontSize: "14px",
-    border: "none",
-    borderRadius: "6px",
-    cursor: "pointer",
-    backgroundColor: "#222",
+    backgroundColor: "#1565C0",
     color: "#fff",
+    border: "none",
+    padding: "10px 16px",
+    borderRadius: "8px",
+    cursor: "pointer",
+    fontWeight: "600",
   },
   secondaryButton: {
+    backgroundColor: "#757575",
+    color: "#fff",
+    border: "none",
     padding: "10px 16px",
-    fontSize: "14px",
-    border: "1px solid #ccc",
-    borderRadius: "6px",
+    borderRadius: "8px",
     cursor: "pointer",
-    backgroundColor: "#f5f5f5",
-    color: "#222",
+    fontWeight: "600",
   },
   error: {
-    color: "red",
-    margin: 0,
+    color: "#C62828",
+    marginBottom: "12px",
+    fontSize: "14px",
+    fontWeight: "500",
   },
 };
 
