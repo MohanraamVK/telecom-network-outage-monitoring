@@ -2,6 +2,11 @@ package com.telecom.network_monitor.controller;
 
 import com.telecom.network_monitor.dto.ApiResponse;
 import com.telecom.network_monitor.dto.IncidentDTO;
+import com.telecom.network_monitor.dto.IncidentEventDTO;
+import com.telecom.network_monitor.dto.NoteRequestDTO;
+import com.telecom.network_monitor.dto.PageResponse;
+import com.telecom.network_monitor.enums.IncidentSeverity;
+import com.telecom.network_monitor.search.IncidentSearchCriteria;
 import com.telecom.network_monitor.dto.IncidentRequestDTO;
 import com.telecom.network_monitor.dto.IncidentStatusUpdateDTO;
 import com.telecom.network_monitor.enums.IncidentStatus;
@@ -51,6 +56,47 @@ public class IncidentController {
     public ApiResponse<IncidentDTO> createIncident(@PathVariable Long nodeId,
                                                    @Valid @RequestBody IncidentRequestDTO dto) {
         return new ApiResponse<>(true, "Incident created successfully", incidentService.createIncident(nodeId, dto));
+    }
+
+    @Operation(summary = "Search incidents",
+            description = "Server-side search (description, node name or #id), filters, sorting and pagination. "
+                    + "sort = property[,asc|desc]; severity sorts by rank (LOW < CRITICAL).")
+    @GetMapping("/search")
+    public ApiResponse<PageResponse<IncidentDTO>> search(
+            @RequestParam(required = false) String q,
+            @RequestParam(required = false) IncidentStatus status,
+            @RequestParam(required = false) IncidentSeverity severity,
+            @RequestParam(required = false) Long nodeId,
+            @RequestParam(defaultValue = "false") boolean deleted,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(required = false) String sort) {
+        return new ApiResponse<>(true, "Incidents fetched successfully",
+                incidentService.search(new IncidentSearchCriteria(q, status, severity, nodeId, deleted), page, size, sort));
+    }
+
+    @Operation(summary = "Recent activity across all incidents", description = "Newest timeline entries first")
+    @GetMapping("/activity")
+    public ApiResponse<List<IncidentEventDTO>> recentActivity(@RequestParam(defaultValue = "20") int limit) {
+        return new ApiResponse<>(true, "Recent activity fetched successfully", incidentService.getRecentActivity(limit));
+    }
+
+    @Operation(summary = "Get incident by ID")
+    @GetMapping("/{id}")
+    public ApiResponse<IncidentDTO> getIncident(@PathVariable Long id) {
+        return new ApiResponse<>(true, "Incident fetched successfully", incidentService.getIncidentById(id));
+    }
+
+    @Operation(summary = "Incident timeline", description = "Every status change, note and automatic action, oldest first")
+    @GetMapping("/{id}/timeline")
+    public ApiResponse<List<IncidentEventDTO>> timeline(@PathVariable Long id) {
+        return new ApiResponse<>(true, "Timeline fetched successfully", incidentService.getTimeline(id));
+    }
+
+    @Operation(summary = "Add a note to an incident")
+    @PostMapping("/{id}/notes")
+    public ApiResponse<IncidentEventDTO> addNote(@PathVariable Long id, @Valid @RequestBody NoteRequestDTO note) {
+        return new ApiResponse<>(true, "Note added successfully", incidentService.addNote(id, note.message()));
     }
 
     @Operation(summary = "Get incidents by node ID")

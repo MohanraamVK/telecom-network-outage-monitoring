@@ -3,6 +3,9 @@ package com.telecom.network_monitor.controller;
 import com.telecom.network_monitor.dto.ApiResponse;
 import com.telecom.network_monitor.dto.NodeDTO;
 import com.telecom.network_monitor.dto.NodeRequestDTO;
+import com.telecom.network_monitor.dto.PageResponse;
+import com.telecom.network_monitor.enums.NodeStatus;
+import com.telecom.network_monitor.search.NodeSearchCriteria;
 import com.telecom.network_monitor.service.NodeService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -54,6 +57,27 @@ public class NodeController {
     @GetMapping
     public ApiResponse<List<NodeDTO>> getAllNodes() {
         return new ApiResponse<>(true, "Active nodes fetched successfully", nodeService.getAllNodes());
+    }
+
+    @Operation(summary = "Search nodes",
+            description = "Server-side search (name, location or #id), status filter, sorting and pagination. "
+                    + "sort = property[,asc|desc]")
+    @GetMapping("/search")
+    public ApiResponse<PageResponse<NodeDTO>> search(
+            @RequestParam(required = false) String q,
+            @RequestParam(required = false) NodeStatus status,
+            @RequestParam(defaultValue = "false") boolean deleted,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(required = false) String sort) {
+        return new ApiResponse<>(true, "Nodes fetched successfully",
+                nodeService.search(new NodeSearchCriteria(q, status, deleted), page, size, sort));
+    }
+
+    @Operation(summary = "Active nodes for dropdowns", description = "id, name, location and status only")
+    @GetMapping("/options")
+    public ApiResponse<List<NodeDTO>> options() {
+        return new ApiResponse<>(true, "Node options fetched successfully", nodeService.getNodeOptions());
     }
 
     @Operation(summary = "Get active nodes with pagination")

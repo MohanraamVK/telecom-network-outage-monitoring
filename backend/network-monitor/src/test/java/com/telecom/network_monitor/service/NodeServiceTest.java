@@ -9,6 +9,9 @@ import com.telecom.network_monitor.enums.IncidentStatus;
 import com.telecom.network_monitor.enums.NodeStatus;
 import com.telecom.network_monitor.exception.BadRequestException;
 import com.telecom.network_monitor.exception.ResourceNotFoundException;
+import com.telecom.network_monitor.monitoring.HeartbeatRegistry;
+import com.telecom.network_monitor.realtime.LiveEventPublisher;
+import com.telecom.network_monitor.repository.IncidentRepository;
 import com.telecom.network_monitor.repository.NodeRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -32,6 +35,15 @@ class NodeServiceTest {
 
     @Mock
     private NodeRepository nodeRepository;
+
+    @Mock
+    private IncidentRepository incidentRepository;
+
+    @Mock
+    private HeartbeatRegistry heartbeats;
+
+    @Mock
+    private LiveEventPublisher liveEvents;
 
     @InjectMocks
     private NodeService nodeService;
@@ -65,6 +77,8 @@ class NodeServiceTest {
         assertThat(node.isDeleted()).isTrue();
         assertThat(node.getIncidents()).allMatch(Incident::isDeleted);
         verify(nodeRepository).save(node);
+        verify(heartbeats).forget(1L);
+        verify(liveEvents).nodeChanged(1L, "deleted");
     }
 
     @Test
@@ -100,6 +114,7 @@ class NodeServiceTest {
         NodeDTO dto = nodeService.getNodeById(1L);
 
         assertThat(dto.getIncidents()).hasSize(1);
+        assertThat(dto.getOpenIncidentCount()).isEqualTo(1);
     }
 
     private static Node nodeWithIncidents() {
