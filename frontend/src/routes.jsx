@@ -1,19 +1,35 @@
-import { BrowserRouter, Route, Routes } from "react-router-dom";
-import Layout from "./components/common/Layout";
-import DashboardPage from "./pages/DashboardPage";
-import IncidentsPage from "./pages/IncidentsPage";
-import NodesPage from "./pages/NodesPage";
+import { lazy, Suspense } from "react";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import ProtectedRoute from "./components/auth/ProtectedRoute";
+import PageLoader from "./components/common/PageLoader";
+import MainLayout from "./layout/MainLayout";
+import LoginPage from "./pages/LoginPage";
+
+// Pages are loaded on demand, so Chart.js only downloads when the dashboard opens.
+const DashboardPage = lazy(() => import("./pages/DashboardPage"));
+const IncidentsPage = lazy(() => import("./pages/IncidentsPage"));
+const NodesPage = lazy(() => import("./pages/NodesPage"));
+const NotFoundPage = lazy(() => import("./pages/NotFoundPage"));
 
 function AppRoutes() {
   return (
     <BrowserRouter>
-      <Layout>
+      <Suspense fallback={<PageLoader />}>
         <Routes>
-          <Route path="/" element={<DashboardPage />} />
-          <Route path="/nodes" element={<NodesPage />} />
-          <Route path="/incidents" element={<IncidentsPage />} />
+          <Route path="/login" element={<LoginPage />} />
+
+          <Route element={<ProtectedRoute />}>
+            <Route element={<MainLayout />}>
+              <Route path="/" element={<DashboardPage />} />
+              <Route path="/nodes" element={<NodesPage />} />
+              <Route path="/incidents" element={<IncidentsPage />} />
+              <Route path="*" element={<NotFoundPage />} />
+            </Route>
+          </Route>
+
+          <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
-      </Layout>
+      </Suspense>
     </BrowserRouter>
   );
 }
