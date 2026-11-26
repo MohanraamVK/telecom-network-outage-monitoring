@@ -23,7 +23,7 @@ A full-stack dashboard for monitoring telecom network nodes (towers, routers) an
 
 **Search and data**
 - Search, filtering, sorting and pagination happen in the database (JPA Specifications), with a whitelist of sortable fields. Severity sorts by rank, not alphabetically.
-- **Flyway** migrations version the schema, and existing databases are baselined automatically.
+- **Flyway** migrations version the schema on MySQL (existing databases are baselined automatically). TiDB Cloud rejects Flyway's history-table setup, so the TiDB deployment sets `FLYWAY_ENABLED=false` and lets Hibernate add new columns, with database defaults that keep existing rows valid.
 - Optimistic locking (`@Version`): two people editing the same item get a clear 409 instead of silently overwriting each other.
 - An empty database is seeded with a small Swedish network and incident history, so a fresh deployment looks alive.
 
@@ -142,6 +142,7 @@ npm run dev                 # http://localhost:5173
 | `SIMULATOR_ENABLED` | `true` | Generate demo heartbeats (set `false` when real devices report) |
 | `SIMULATOR_FAILURE_PROBABILITY` | `0.002` | Chance per check that a healthy simulated node starts an outage |
 | `SEED_DEMO_DATA` | `true` | Seed demo nodes and history into an empty database |
+| `FLYWAY_ENABLED` / `JPA_DDL_AUTO` | `true` / `none` | Schema management; TiDB uses `false` / `update` |
 | `VITE_API_BASE_URL` (frontend) | `http://localhost:8080/api` | API location used by the SPA |
 
 ## API overview

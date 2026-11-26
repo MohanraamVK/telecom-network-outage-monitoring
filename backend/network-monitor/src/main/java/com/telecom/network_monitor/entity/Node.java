@@ -2,6 +2,7 @@ package com.telecom.network_monitor.entity;
 
 import com.telecom.network_monitor.enums.NodeStatus;
 import jakarta.persistence.*;
+import org.hibernate.annotations.ColumnDefault;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -28,10 +29,15 @@ public class Node {
     private LocalDateTime lastHeartbeatAt;
 
     /** Whether the outage detector watches this node. */
+    // Database defaults matter when Hibernate adds these columns to existing rows
+    // (TiDB deployments, where Flyway is disabled): existing nodes stay monitored.
     @Column(nullable = false)
+    @ColumnDefault("true")
     private boolean monitored = true;
 
     @Version
+    @Column(nullable = false)
+    @ColumnDefault("0")
     private Long version;
 
     @OneToMany(mappedBy = "node", fetch = FetchType.LAZY)

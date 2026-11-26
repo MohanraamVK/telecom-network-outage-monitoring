@@ -35,6 +35,11 @@ services:
       # URL of the frontend below, e.g. https://telecom-monitor.onrender.com
       - key: CORS_ALLOWED_ORIGINS
         sync: false
+      # TiDB Cloud rejects Flyway's schema-history setup: let Hibernate update the schema
+      - key: FLYWAY_ENABLED
+        value: "false"
+      - key: JPA_DDL_AUTO
+        value: update
       # Fit the JVM into the free instance's 512 MB of RAM
       - key: JAVA_TOOL_OPTIONS
         value: "-XX:MaxRAMPercentage=75 -XX:+UseSerialGC -XX:TieredStopAtLevel=1"
