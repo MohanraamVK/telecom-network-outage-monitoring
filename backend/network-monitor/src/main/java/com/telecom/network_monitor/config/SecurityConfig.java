@@ -38,6 +38,7 @@ public class SecurityConfig {
             "/swagger-ui.html",
             "/swagger-ui/**",
             "/v3/api-docs/**",
+            "/api/health",
             "/error"
     };
 
@@ -71,7 +72,10 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers(PUBLIC_ENDPOINTS).permitAll()
-                        .anyRequest().authenticated()
+                        // Any logged-in user (including the read-only demo account) can view data...
+                        .requestMatchers(HttpMethod.GET, "/api/**").authenticated()
+                        // ...but only admins can create, update, delete or restore.
+                        .anyRequest().hasRole("ADMIN")
                 )
                 .authenticationProvider(authenticationProvider())
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);

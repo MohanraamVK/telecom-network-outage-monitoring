@@ -6,6 +6,9 @@ import { useAuth } from "../hooks/useAuth";
 // (e.g. for a public portfolio demo) via VITE_SHOW_DEMO_CREDENTIALS=true.
 const SHOW_DEMO_CREDENTIALS =
   import.meta.env.DEV || import.meta.env.VITE_SHOW_DEMO_CREDENTIALS === "true";
+const DEMO_USERNAME = import.meta.env.VITE_DEMO_USERNAME || "admin";
+const DEMO_PASSWORD = import.meta.env.VITE_DEMO_PASSWORD || "admin123";
+const DEMO_IS_READ_ONLY = Boolean(import.meta.env.VITE_DEMO_USERNAME);
 
 function LoginPage() {
   const { login, isAuthenticated } = useAuth();
@@ -117,10 +120,20 @@ function LoginPage() {
         {SHOW_DEMO_CREDENTIALS ? (
           <div style={styles.demoBox}>
             <p style={styles.demoText}>
-              <strong>Seeded admin user</strong>
+              <strong>{DEMO_IS_READ_ONLY ? "Demo account (read-only)" : "Seeded admin user"}</strong>
             </p>
-            <p style={styles.demoText}>Username: admin</p>
-            <p style={styles.demoText}>Password: admin123</p>
+            <p style={styles.demoText}>Username: {DEMO_USERNAME}</p>
+            <p style={styles.demoText}>Password: {DEMO_PASSWORD}</p>
+            <button
+              type="button"
+              style={styles.demoButton}
+              onClick={() => {
+                setError("");
+                setFormData({ username: DEMO_USERNAME, password: DEMO_PASSWORD });
+              }}
+            >
+              Fill in demo login
+            </button>
           </div>
         ) : null}
       </div>
@@ -205,6 +218,17 @@ const styles = {
     backgroundColor: "#f9fafb",
     border: "1px solid #e5e7eb",
     borderRadius: "8px",
+  },
+  demoButton: {
+    marginTop: "8px",
+    border: "1px solid #D1D5DB",
+    backgroundColor: "#FFFFFF",
+    color: "#1565C0",
+    borderRadius: "6px",
+    padding: "6px 10px",
+    cursor: "pointer",
+    fontWeight: "600",
+    fontSize: "13px",
   },
   demoText: {
     margin: "2px 0",

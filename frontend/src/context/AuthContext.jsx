@@ -215,6 +215,8 @@ export function AuthProvider({ children }) {
       token,
       user,
       isAuthenticated: Boolean(token),
+      // Only admins can change data; the public demo account (VIEWER) is read-only.
+      canEdit: user?.role === "ADMIN",
       login,
       logout,
     }),

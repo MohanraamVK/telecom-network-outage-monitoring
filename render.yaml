@@ -1,0 +1,63 @@
+# Render Blueprint: free hosting for the whole app.
+# Render dashboard -> New -> Blueprint -> pick this repo. Values marked
+# "sync: false" are asked for once, when the Blueprint is created.
+services:
+  # Spring Boot API (Docker, free instance: sleeps after 15 min idle)
+  - type: web
+    name: telecom-monitor-api
+    runtime: docker
+    plan: free
+    region: frankfurt
+    rootDir: backend/network-monitor
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    envVars:
+      # TiDB Cloud Starter connection (see README "Deploy for free")
+      - key: DB_URL
+        sync: false
+      - key: DB_USERNAME
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: ADMIN_USERNAME
+        value: admin
+      - key: ADMIN_PASSWORD
+        sync: false
+      # Public read-only login shown on the login page
+      - key: DEMO_ENABLED
+        value: "true"
+      - key: DEMO_USERNAME
+        value: demo
+      - key: DEMO_PASSWORD
+        value: demo123
+      # URL of the frontend below, e.g. https://telecom-monitor.onrender.com
+      - key: CORS_ALLOWED_ORIGINS
+        sync: false
+      # Fit the JVM into the free instance's 512 MB of RAM
+      - key: JAVA_TOOL_OPTIONS
+        value: "-XX:MaxRAMPercentage=75 -XX:+UseSerialGC -XX:TieredStopAtLevel=1"
+
+  # React SPA (static site: free, always on, global CDN)
+  - type: web
+    name: telecom-monitor
+    runtime: static
+    rootDir: frontend
+    buildCommand: npm ci && npm run build
+    staticPublishPath: dist
+    routes:
+      # Let React Router handle deep links such as /nodes on refresh
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      # URL of the API above + /api, e.g. https://telecom-monitor-api.onrender.com/api
+      - key: VITE_API_BASE_URL
+        sync: false
+      - key: VITE_SHOW_DEMO_CREDENTIALS
+        value: "true"
+      - key: VITE_DEMO_USERNAME
+        value: demo
+      - key: VITE_DEMO_PASSWORD
+        value: demo123

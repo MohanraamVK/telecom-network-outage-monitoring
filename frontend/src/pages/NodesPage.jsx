@@ -10,6 +10,7 @@ import NodeForm from "../components/node/NodeForm";
 import NodeTable from "../components/node/NodeTable";
 import { useConfirmation } from "../context/ConfirmationContext";
 import { useToast } from "../context/ToastContext";
+import { useAuth } from "../hooks/useAuth";
 import {
   createNode,
   deleteNode,
@@ -35,6 +36,7 @@ function NodesPage() {
 
   const { showSuccess, showError, showInfo } = useToast();
   const { confirm } = useConfirmation();
+  const { canEdit } = useAuth();
 
   const sortOptions = [
     { value: "id", label: "ID" },
@@ -265,7 +267,7 @@ function NodesPage() {
     <div style={styles.page}>
       <h2>Nodes Management</h2>
 
-      {!showDeleted && (
+      {!showDeleted && canEdit && (
         <NodeForm
           key={editingNode ? editingNode.id : "new"}
           onAddNode={handleAddNode}
@@ -341,6 +343,7 @@ function NodesPage() {
             onEditNode={handleEditNode}
             onDeleteNode={handleDeleteNode}
             onRestoreNode={handleRestoreNode}
+            readOnly={!canEdit}
             showDeleted={showDeleted}
           />
 

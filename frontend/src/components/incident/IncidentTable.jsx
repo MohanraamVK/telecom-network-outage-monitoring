@@ -8,6 +8,7 @@ function IncidentTable({
   onRestoreIncident,
   showDeleted,
   deletedNodeIds = [],
+  readOnly = false,
 }) {
   const getSeverityStyle = (severity) => {
     switch (severity) {
@@ -136,7 +137,9 @@ function IncidentTable({
 
                 <td style={styles.td}>
                   <div style={styles.actionButtons}>
-                    {!showDeleted ? (
+                    {readOnly ? (
+                      <span style={styles.readOnlyText}>View only</span>
+                    ) : !showDeleted ? (
                       <>
                         <select
                           value={incident.status || ""}
@@ -206,6 +209,10 @@ function IncidentTable({
 }
 
 const styles = {
+  readOnlyText: {
+    color: "#9CA3AF",
+    fontSize: "13px",
+  },
   tableContainer: {
     background: "#fff",
     padding: "20px",

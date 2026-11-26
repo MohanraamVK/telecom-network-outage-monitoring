@@ -2,7 +2,7 @@ import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 
 function Navbar() {
-  const { user, logout } = useAuth();
+  const { user, logout, canEdit } = useAuth();
   const navigate = useNavigate();
 
   const handleLogout = () => {
@@ -53,6 +53,11 @@ function Navbar() {
 
         <div style={styles.userSection}>
           <span style={styles.userText}>{user?.username || "User"}</span>
+          {!canEdit ? (
+            <span style={styles.readOnlyBadge} title="This account can view data but not change it">
+              Read-only
+            </span>
+          ) : null}
           <button onClick={handleLogout} style={styles.logoutButton}>
             Logout
           </button>
@@ -127,6 +132,14 @@ const styles = {
     display: "flex",
     alignItems: "center",
     gap: "10px",
+  },
+  readOnlyBadge: {
+    fontSize: "12px",
+    fontWeight: "600",
+    color: "#92400E",
+    backgroundColor: "#FEF3C7",
+    padding: "4px 8px",
+    borderRadius: "999px",
   },
   userText: {
     fontSize: "14px",

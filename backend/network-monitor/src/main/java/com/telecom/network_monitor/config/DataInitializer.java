@@ -14,7 +14,10 @@ public class DataInitializer {
     CommandLineRunner initUsers(UserRepository userRepository,
                                 PasswordEncoder passwordEncoder,
                                 @Value("${app.admin.username:admin}") String adminUsername,
-                                @Value("${app.admin.password:admin123}") String adminPassword) {
+                                @Value("${app.admin.password:admin123}") String adminPassword,
+                                @Value("${app.demo.enabled:false}") boolean demoEnabled,
+                                @Value("${app.demo.username:demo}") String demoUsername,
+                                @Value("${app.demo.password:demo123}") String demoPassword) {
         return args -> {
             if (!userRepository.existsByUsername(adminUsername)) {
                 User admin = new User();
@@ -22,6 +25,15 @@ public class DataInitializer {
                 admin.setPassword(passwordEncoder.encode(adminPassword));
                 admin.setRole("ADMIN");
                 userRepository.save(admin);
+            }
+
+            // Read-only account for a public portfolio demo: can browse, cannot change data
+            if (demoEnabled && !userRepository.existsByUsername(demoUsername)) {
+                User demo = new User();
+                demo.setUsername(demoUsername);
+                demo.setPassword(passwordEncoder.encode(demoPassword));
+                demo.setRole("VIEWER");
+                userRepository.save(demo);
             }
         };
     }

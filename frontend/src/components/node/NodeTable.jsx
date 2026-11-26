@@ -4,6 +4,7 @@ function NodeTable({
   onDeleteNode,
   onRestoreNode,
   showDeleted,
+  readOnly = false,
 }) {
   const getStatusStyle = (status) => {
     switch (status) {
@@ -69,7 +70,9 @@ function NodeTable({
 
               <td style={styles.td}>
                 <div style={styles.actionButtons}>
-                  {!showDeleted ? (
+                  {readOnly ? (
+                    <span style={styles.readOnlyText}>View only</span>
+                  ) : !showDeleted ? (
                     <>
                       <button
                         onClick={() => onEditNode(node)}
@@ -104,6 +107,10 @@ function NodeTable({
 }
 
 const styles = {
+  readOnlyText: {
+    color: "#9CA3AF",
+    fontSize: "13px",
+  },
   tableContainer: {
     background: "#fff",
     padding: "20px",

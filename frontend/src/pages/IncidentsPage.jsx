@@ -8,6 +8,7 @@ import IncidentForm from "../components/incident/IncidentForm";
 import IncidentTable from "../components/incident/IncidentTable";
 import { useConfirmation } from "../context/ConfirmationContext";
 import { useToast } from "../context/ToastContext";
+import { useAuth } from "../hooks/useAuth";
 import {
   createIncident,
   deleteIncident,
@@ -34,6 +35,7 @@ function IncidentsPage() {
 
   const { showSuccess, showError, showWarning } = useToast();
   const { confirm } = useConfirmation();
+  const { canEdit } = useAuth();
 
   const extractIncidentArray = (response) => {
     if (Array.isArray(response?.data)) {
@@ -294,7 +296,7 @@ function IncidentsPage() {
     <div style={styles.page}>
       <h2>Incidents Management</h2>
 
-      {!showDeleted && <IncidentForm onAddIncident={handleAddIncident} />}
+      {!showDeleted && canEdit && <IncidentForm onAddIncident={handleAddIncident} />}
 
       <PageControlsCard
         title="Incident Controls"
@@ -391,6 +393,7 @@ function IncidentsPage() {
             onStatusUpdate={handleStatusUpdate}
             onDeleteIncident={handleDeleteIncident}
             onRestoreIncident={handleRestoreIncident}
+            readOnly={!canEdit}
             showDeleted={showDeleted}
             deletedNodeIds={deletedNodeIds}
           />
