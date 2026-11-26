@@ -1,10 +1,12 @@
 package com.telecom.network_monitor.dto;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 
 public class IncidentRequestDTO {
 
     @NotBlank(message = "Description is required")
+    @Size(max = 255, message = "Description must be at most 255 characters")
     private String description;
 
     @NotBlank(message = "Severity is required")

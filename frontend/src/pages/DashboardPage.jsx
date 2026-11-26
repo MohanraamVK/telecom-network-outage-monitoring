@@ -1,11 +1,15 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import NodeStatusBarChart from "../components/dashboard/NodeStatusBarChart";
-import DashboardSkeleton from "../components/dashboard/DashBoardSkeleton";
+import DashboardSkeleton from "../components/dashboard/DashboardSkeleton";
 import SeverityPieChart from "../components/dashboard/SeverityPieChart";
 import StatsCard from "../components/dashboard/StatsCard";
 import StatusBarChart from "../components/dashboard/StatusBarChart";
 import { useToast } from "../context/ToastContext";
 import { getDashboardData } from "../services/dashboardService";
+import { formatDuration } from "../utils/time";
+
+// Refresh the summary periodically so the dashboard works as a live wall screen.
+const REFRESH_INTERVAL_MS = 30000;
 
 function DashboardPage() {
   const [dashboardData, setDashboardData] = useState({
@@ -22,31 +26,54 @@ function DashboardPage() {
     mediumSeverityIncidents: 0,
     highSeverityIncidents: 0,
     criticalSeverityIncidents: 0,
+    unresolvedCriticalIncidents: 0,
+    networkAvailabilityPercent: 100,
+    averageResolutionMinutes: null,
   });
+  const [lastUpdated, setLastUpdated] = useState(null);
 
   const [loading, setLoading] = useState(true);
   const [pageError, setPageError] = useState("");
   const { showError } = useToast();
 
-  useEffect(() => {
-    const fetchDashboard = async () => {
+  const fetchDashboard = useCallback(
+    async ({ silent = false } = {}) => {
       try {
-        setLoading(true);
+        if (!silent) {
+          setLoading(true);
+        }
         setPageError("");
 
         const data = await getDashboardData();
         setDashboardData(data);
+        setLastUpdated(new Date());
       } catch (error) {
         console.error("Dashboard fetch error:", error);
-        setPageError("Failed to load dashboard data.");
-        showError("Failed to load dashboard", "Please try again.");
+        // A failed background refresh keeps showing the last good data.
+        if (!silent) {
+          setPageError("Failed to load dashboard data.");
+          showError("Failed to load dashboard", "Please try again.");
+        }
       } finally {
-        setLoading(false);
+        if (!silent) {
+          setLoading(false);
+        }
       }
-    };
+    },
+    [showError]
+  );
 
+  useEffect(() => {
     fetchDashboard();
-  }, []);
+
+    const intervalId = setInterval(() => {
+      if (document.visibilityState === "visible") {
+        fetchDashboard({ silent: true });
+      }
+    }, REFRESH_INTERVAL_MS);
+
+    return () => clearInterval(intervalId);
+  }, [fetchDashboard]);
 
   if (loading) {
     return <DashboardSkeleton />;
@@ -65,7 +92,27 @@ function DashboardPage() {
             Overview of nodes and incidents in the telecom monitoring system.
           </p>
         </div>
+        <div style={styles.refreshBox}>
+          {lastUpdated ? (
+            <span style={styles.lastUpdated}>
+              Updated {lastUpdated.toLocaleTimeString()} · auto-refresh 30s
+            </span>
+          ) : null}
+          <button type="button" onClick={() => fetchDashboard()} style={styles.refreshButton}>
+            Refresh
+          </button>
+        </div>
       </div>
+
+      {dashboardData.unresolvedCriticalIncidents > 0 ? (
+        <div style={styles.alert} role="alert">
+          <strong>
+            {dashboardData.unresolvedCriticalIncidents} critical incident
+            {dashboardData.unresolvedCriticalIncidents === 1 ? "" : "s"} still unresolved.
+          </strong>{" "}
+          Check the Incidents page.
+        </div>
+      ) : null}
 
       <section style={styles.section}>
         <h2 style={styles.sectionTitle}>Overall Summary</h2>
@@ -74,6 +121,31 @@ function DashboardPage() {
           <StatsCard title="Total Active Incidents" value={dashboardData.totalIncidents} />
           <StatsCard title="Open Incidents" value={dashboardData.openIncidents} />
           <StatsCard title="Critical Incidents" value={dashboardData.criticalSeverityIncidents} />
+        </div>
+      </section>
+
+      <section style={styles.section}>
+        <h2 style={styles.sectionTitle}>Service Health</h2>
+        <div style={styles.grid}>
+          <StatsCard
+            title="Network Availability"
+            value={`${dashboardData.networkAvailabilityPercent}%`}
+            subtitle="Share of nodes currently ACTIVE"
+          />
+          <StatsCard
+            title="Mean Time to Resolve"
+            value={formatDuration(dashboardData.averageResolutionMinutes)}
+            subtitle={
+              dashboardData.averageResolutionMinutes === null
+                ? "No resolved incidents yet"
+                : "Average from opened to resolved"
+            }
+          />
+          <StatsCard
+            title="Unresolved Critical"
+            value={dashboardData.unresolvedCriticalIncidents}
+            subtitle="CRITICAL incidents OPEN or IN_PROGRESS"
+          />
         </div>
       </section>
 
@@ -130,6 +202,37 @@ const styles = {
     margin: "0 auto",
   },
   header: {
+    marginBottom: "24px",
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: "16px",
+    flexWrap: "wrap",
+  },
+  refreshBox: {
+    display: "flex",
+    alignItems: "center",
+    gap: "12px",
+  },
+  lastUpdated: {
+    fontSize: "13px",
+    color: "#6B7280",
+  },
+  refreshButton: {
+    border: "1px solid #D1D5DB",
+    backgroundColor: "#FFFFFF",
+    color: "#111827",
+    padding: "8px 14px",
+    borderRadius: "8px",
+    cursor: "pointer",
+    fontWeight: "600",
+  },
+  alert: {
+    backgroundColor: "#FEF2F2",
+    border: "1px solid #FECACA",
+    color: "#991B1B",
+    padding: "12px 16px",
+    borderRadius: "10px",
     marginBottom: "24px",
   },
   title: {

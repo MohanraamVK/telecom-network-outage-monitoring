@@ -1,13 +1,16 @@
 package com.telecom.network_monitor.dto;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 
 public class NodeRequestDTO {
 
     @NotBlank(message = "Name is required")
+    @Size(max = 100, message = "Name must be at most 100 characters")
     private String name;
 
     @NotBlank(message = "Location is required")
+    @Size(max = 255, message = "Location must be at most 255 characters")
     private String location;
 
     @NotBlank(message = "Status is required")

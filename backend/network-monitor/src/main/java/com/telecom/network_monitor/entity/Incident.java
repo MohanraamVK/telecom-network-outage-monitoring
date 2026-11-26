@@ -3,6 +3,10 @@ package com.telecom.network_monitor.entity;
 import com.telecom.network_monitor.enums.IncidentSeverity;
 import com.telecom.network_monitor.enums.IncidentStatus;
 import jakarta.persistence.*;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
+
+import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "incidents")
@@ -22,7 +26,19 @@ public class Incident {
 
     private boolean deleted = false;
 
-    @ManyToOne
+    @CreationTimestamp
+    @Column(name = "created_at", updatable = false)
+    private LocalDateTime createdAt;
+
+    @UpdateTimestamp
+    @Column(name = "updated_at")
+    private LocalDateTime updatedAt;
+
+    /** When the incident first reached RESOLVED/CLOSED; cleared if it is re-opened. */
+    @Column(name = "resolved_at")
+    private LocalDateTime resolvedAt;
+
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "node_id", nullable = false)
     private Node node;
 
@@ -53,6 +69,18 @@ public class Incident {
         return node;
     }
 
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
+    }
+
+    public LocalDateTime getUpdatedAt() {
+        return updatedAt;
+    }
+
+    public LocalDateTime getResolvedAt() {
+        return resolvedAt;
+    }
+
     public void setId(Long id) {
         this.id = id;
     }
@@ -75,5 +103,17 @@ public class Incident {
 
     public void setNode(Node node) {
         this.node = node;
+    }
+
+    public void setCreatedAt(LocalDateTime createdAt) {
+        this.createdAt = createdAt;
+    }
+
+    public void setUpdatedAt(LocalDateTime updatedAt) {
+        this.updatedAt = updatedAt;
+    }
+
+    public void setResolvedAt(LocalDateTime resolvedAt) {
+        this.resolvedAt = resolvedAt;
     }
 }

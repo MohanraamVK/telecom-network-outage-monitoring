@@ -6,16 +6,20 @@ import com.telecom.network_monitor.dto.NodeRequestDTO;
 import com.telecom.network_monitor.entity.Incident;
 import com.telecom.network_monitor.entity.Node;
 import com.telecom.network_monitor.enums.NodeStatus;
+import com.telecom.network_monitor.exception.BadRequestException;
 import com.telecom.network_monitor.exception.ResourceNotFoundException;
 import com.telecom.network_monitor.repository.NodeRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
 @Service
+@Transactional(readOnly = true)
 public class NodeService {
 
     private final NodeRepository nodeRepository;
@@ -24,10 +28,11 @@ public class NodeService {
         this.nodeRepository = nodeRepository;
     }
 
+    @Transactional
     public NodeDTO createNode(NodeRequestDTO dto) {
         Node node = new Node();
-        node.setName(dto.getName());
-        node.setLocation(dto.getLocation());
+        node.setName(dto.getName().trim());
+        node.setLocation(dto.getLocation().trim());
         node.setStatus(parseNodeStatus(dto.getStatus()));
         node.setDeleted(false);
 
@@ -62,19 +67,21 @@ public class NodeService {
         return convertToDTO(node);
     }
 
+    @Transactional
     public NodeDTO updateNode(Long id, NodeRequestDTO dto) {
         Node node = nodeRepository.findById(id)
                 .filter(n -> !n.isDeleted())
                 .orElseThrow(() -> new ResourceNotFoundException("Node not found with id: " + id));
 
-        node.setName(dto.getName());
-        node.setLocation(dto.getLocation());
+        node.setName(dto.getName().trim());
+        node.setLocation(dto.getLocation().trim());
         node.setStatus(parseNodeStatus(dto.getStatus()));
 
         Node updated = nodeRepository.save(node);
         return convertToDTO(updated);
     }
 
+    @Transactional
     public String deleteNode(Long id) {
         Node node = nodeRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Node not found with id: " + id));
@@ -93,6 +100,7 @@ public class NodeService {
         return "Node and its incidents soft deleted successfully!";
     }
 
+    @Transactional
     public String restoreNode(Long id) {
         Node node = nodeRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Node not found with id: " + id));
@@ -113,9 +121,9 @@ public class NodeService {
 
     private NodeStatus parseNodeStatus(String status) {
         try {
-            return NodeStatus.valueOf(status.toUpperCase());
-        } catch (IllegalArgumentException ex) {
-            throw new RuntimeException("Invalid node status. Allowed values: ACTIVE, DOWN, MAINTENANCE");
+            return NodeStatus.valueOf(status.trim().toUpperCase());
+        } catch (IllegalArgumentException | NullPointerException ex) {
+            throw new BadRequestException("Invalid node status. Allowed values: " + Arrays.toString(NodeStatus.values()));
         }
     }
 

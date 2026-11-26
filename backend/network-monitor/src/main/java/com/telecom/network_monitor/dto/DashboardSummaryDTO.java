@@ -15,6 +15,20 @@ public class DashboardSummaryDTO {
     private long closedIncidents;
     private long deletedIncidents;
 
+    private long lowSeverityIncidents;
+    private long mediumSeverityIncidents;
+    private long highSeverityIncidents;
+    private long criticalSeverityIncidents;
+
+    /** CRITICAL incidents that are still OPEN or IN_PROGRESS. */
+    private long unresolvedCriticalIncidents;
+
+    /** Share of active nodes that are ACTIVE (0-100), or 100 when there are no nodes. */
+    private double networkAvailabilityPercent;
+
+    /** Mean time to resolve (MTTR) in minutes, or null if nothing has been resolved yet. */
+    private Double averageResolutionMinutes;
+
     public DashboardSummaryDTO() {
     }
 
@@ -120,5 +134,61 @@ public class DashboardSummaryDTO {
 
     public void setDeletedIncidents(long deletedIncidents) {
         this.deletedIncidents = deletedIncidents;
+    }
+
+    public long getLowSeverityIncidents() {
+        return lowSeverityIncidents;
+    }
+
+    public void setLowSeverityIncidents(long lowSeverityIncidents) {
+        this.lowSeverityIncidents = lowSeverityIncidents;
+    }
+
+    public long getMediumSeverityIncidents() {
+        return mediumSeverityIncidents;
+    }
+
+    public void setMediumSeverityIncidents(long mediumSeverityIncidents) {
+        this.mediumSeverityIncidents = mediumSeverityIncidents;
+    }
+
+    public long getHighSeverityIncidents() {
+        return highSeverityIncidents;
+    }
+
+    public void setHighSeverityIncidents(long highSeverityIncidents) {
+        this.highSeverityIncidents = highSeverityIncidents;
+    }
+
+    public long getCriticalSeverityIncidents() {
+        return criticalSeverityIncidents;
+    }
+
+    public void setCriticalSeverityIncidents(long criticalSeverityIncidents) {
+        this.criticalSeverityIncidents = criticalSeverityIncidents;
+    }
+
+    public long getUnresolvedCriticalIncidents() {
+        return unresolvedCriticalIncidents;
+    }
+
+    public void setUnresolvedCriticalIncidents(long unresolvedCriticalIncidents) {
+        this.unresolvedCriticalIncidents = unresolvedCriticalIncidents;
+    }
+
+    public double getNetworkAvailabilityPercent() {
+        return networkAvailabilityPercent;
+    }
+
+    public void setNetworkAvailabilityPercent(double networkAvailabilityPercent) {
+        this.networkAvailabilityPercent = networkAvailabilityPercent;
+    }
+
+    public Double getAverageResolutionMinutes() {
+        return averageResolutionMinutes;
+    }
+
+    public void setAverageResolutionMinutes(Double averageResolutionMinutes) {
+        this.averageResolutionMinutes = averageResolutionMinutes;
     }
 }

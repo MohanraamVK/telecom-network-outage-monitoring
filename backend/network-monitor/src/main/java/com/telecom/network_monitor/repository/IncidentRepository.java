@@ -1,11 +1,13 @@
 package com.telecom.network_monitor.repository;
 
 import com.telecom.network_monitor.entity.Incident;
+import com.telecom.network_monitor.enums.IncidentSeverity;
 import com.telecom.network_monitor.enums.IncidentStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -30,4 +32,10 @@ public interface IncidentRepository extends JpaRepository<Incident, Long> {
     long countByDeletedTrue();
 
     long countByStatusAndDeletedFalse(IncidentStatus status);
+
+    long countBySeverityAndDeletedFalse(IncidentSeverity severity);
+
+    long countBySeverityAndStatusInAndDeletedFalse(IncidentSeverity severity, Collection<IncidentStatus> statuses);
+
+    List<Incident> findByDeletedFalseAndResolvedAtIsNotNull();
 }

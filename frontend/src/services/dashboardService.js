@@ -1,50 +1,34 @@
-import { getAllNodes } from "./nodeService";
-import { getAllIncidents } from "./incidentService";
+import api from "./api";
 
+/**
+ * Loads all dashboard metrics with a single request. The backend computes the
+ * counts in the database instead of the browser downloading every node and
+ * incident just to count them.
+ */
 export const getDashboardData = async () => {
-  const [nodesResponse, incidentsResponse] = await Promise.all([
-    getAllNodes(),
-    getAllIncidents(),
-  ]);
-
-  const nodes = Array.isArray(nodesResponse?.data) ? nodesResponse.data : [];
-  const incidents = Array.isArray(incidentsResponse?.data)
-    ? incidentsResponse.data
-    : [];
-
-  const activeNodes = nodes.filter((node) => !node.deleted);
-  const activeIncidents = incidents.filter((incident) => !incident.deleted);
+  const response = await api.get("/dashboard/summary");
+  const summary = response.data?.data ?? {};
 
   return {
-    totalNodes: activeNodes.length,
-    totalIncidents: activeIncidents.length,
+    totalNodes: summary.totalNodes ?? 0,
+    totalIncidents: summary.totalIncidents ?? 0,
 
-    activeNodeCount: activeNodes.filter((node) => node.status === "ACTIVE").length,
-    downNodeCount: activeNodes.filter((node) => node.status === "DOWN").length,
-    maintenanceNodeCount: activeNodes.filter((node) => node.status === "MAINTENANCE").length,
+    activeNodeCount: summary.activeNodes ?? 0,
+    downNodeCount: summary.downNodes ?? 0,
+    maintenanceNodeCount: summary.maintenanceNodes ?? 0,
 
-    openIncidents: activeIncidents.filter((incident) => incident.status === "OPEN").length,
-    inProgressIncidents: activeIncidents.filter(
-      (incident) => incident.status === "IN_PROGRESS"
-    ).length,
-    resolvedIncidents: activeIncidents.filter(
-      (incident) => incident.status === "RESOLVED"
-    ).length,
-    closedIncidents: activeIncidents.filter(
-      (incident) => incident.status === "CLOSED"
-    ).length,
+    openIncidents: summary.openIncidents ?? 0,
+    inProgressIncidents: summary.inProgressIncidents ?? 0,
+    resolvedIncidents: summary.resolvedIncidents ?? 0,
+    closedIncidents: summary.closedIncidents ?? 0,
 
-    lowSeverityIncidents: activeIncidents.filter(
-      (incident) => incident.severity === "LOW"
-    ).length,
-    mediumSeverityIncidents: activeIncidents.filter(
-      (incident) => incident.severity === "MEDIUM"
-    ).length,
-    highSeverityIncidents: activeIncidents.filter(
-      (incident) => incident.severity === "HIGH"
-    ).length,
-    criticalSeverityIncidents: activeIncidents.filter(
-      (incident) => incident.severity === "CRITICAL"
-    ).length,
+    lowSeverityIncidents: summary.lowSeverityIncidents ?? 0,
+    mediumSeverityIncidents: summary.mediumSeverityIncidents ?? 0,
+    highSeverityIncidents: summary.highSeverityIncidents ?? 0,
+    criticalSeverityIncidents: summary.criticalSeverityIncidents ?? 0,
+    unresolvedCriticalIncidents: summary.unresolvedCriticalIncidents ?? 0,
+
+    networkAvailabilityPercent: summary.networkAvailabilityPercent ?? 100,
+    averageResolutionMinutes: summary.averageResolutionMinutes ?? null,
   };
 };

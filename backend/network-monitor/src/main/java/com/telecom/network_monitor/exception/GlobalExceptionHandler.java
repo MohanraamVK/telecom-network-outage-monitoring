@@ -1,18 +1,24 @@
 package com.telecom.network_monitor.exception;
 
 import com.telecom.network_monitor.dto.ApiResponse;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.ErrorResponse;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
     @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<ApiResponse<Object>> handleResourceNotFound(ResourceNotFoundException ex) {
@@ -70,21 +76,43 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
     }
 
-    @ExceptionHandler(RuntimeException.class)
-    public ResponseEntity<ApiResponse<Object>> handleRuntimeException(RuntimeException ex) {
-        ApiResponse<Object> response = new ApiResponse<>(
-                false,
-                ex.getMessage(),
-                null
-        );
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+    @ExceptionHandler(BadRequestException.class)
+    public ResponseEntity<ApiResponse<Object>> handleBadRequest(BadRequestException ex) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse<>(false, ex.getMessage(), null));
     }
 
+    /** e.g. GET /api/incidents?status=FOO or GET /api/nodes/abc */
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ApiResponse<Object>> handleTypeMismatch(MethodArgumentTypeMismatchException ex) {
+        String message = "Invalid value '" + ex.getValue() + "' for parameter '" + ex.getName() + "'";
+
+        Class<?> requiredType = ex.getRequiredType();
+        if (requiredType != null && requiredType.isEnum()) {
+            message += ". Allowed values: " + java.util.Arrays.toString(requiredType.getEnumConstants());
+        }
+
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse<>(false, message, null));
+    }
+
+    /**
+     * Anything unexpected is a server error. The real cause is logged, but not
+     * sent to the client, so stack details and SQL messages never leak out.
+     */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Object>> handleGenericException(Exception ex) {
+        // Spring MVC's own exceptions (404 no route, 405 wrong method, 415 ...) already
+        // know their HTTP status: keep it instead of turning them into a 500.
+        if (ex instanceof ErrorResponse errorResponse) {
+            return ResponseEntity.status(errorResponse.getStatusCode())
+                    .body(new ApiResponse<>(false, ex.getMessage(), null));
+        }
+
+        log.error("Unhandled exception", ex);
         ApiResponse<Object> response = new ApiResponse<>(
                 false,
-                "Something went wrong: " + ex.getMessage(),
+                "An unexpected error occurred. Please try again later.",
                 null
         );
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);

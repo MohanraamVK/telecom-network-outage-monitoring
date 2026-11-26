@@ -1,3 +1,6 @@
+import { canTransition, INCIDENT_STATUSES, isFinalStatus } from "../../utils/incidentWorkflow";
+import { formatDateTime, formatDuration, formatRelative, minutesBetween } from "../../utils/time";
+
 function IncidentTable({
   incidents,
   onStatusUpdate,
@@ -83,6 +86,8 @@ function IncidentTable({
             <th style={styles.th}>Status</th>
             <th style={styles.th}>Node ID</th>
             <th style={styles.th}>Node Name</th>
+            <th style={styles.th}>Opened</th>
+            <th style={styles.th}>Time to Resolve</th>
             <th style={styles.th}>Actions</th>
           </tr>
         </thead>
@@ -120,6 +125,14 @@ function IncidentTable({
 
                 <td style={styles.td}>{incident.nodeId ?? "-"}</td>
                 <td style={styles.td}>{incident.nodeName || "-"}</td>
+                <td style={styles.td} title={formatDateTime(incident.createdAt)}>
+                  {formatRelative(incident.createdAt)}
+                </td>
+                <td style={styles.td} title={formatDateTime(incident.resolvedAt)}>
+                  {incident.resolvedAt
+                    ? formatDuration(minutesBetween(incident.createdAt, incident.resolvedAt))
+                    : "-"}
+                </td>
 
                 <td style={styles.td}>
                   <div style={styles.actionButtons}>
@@ -131,11 +144,23 @@ function IncidentTable({
                             onStatusUpdate(incident.id, event.target.value)
                           }
                           style={styles.statusSelect}
+                          disabled={isFinalStatus(incident.status)}
+                          title={
+                            isFinalStatus(incident.status)
+                              ? "Closed incidents are final. Raise a new incident if the fault returns."
+                              : "Change status"
+                          }
+                          aria-label={`Status of incident ${incident.id}`}
                         >
-                          <option value="OPEN">OPEN</option>
-                          <option value="IN_PROGRESS">IN_PROGRESS</option>
-                          <option value="RESOLVED">RESOLVED</option>
-                          <option value="CLOSED">CLOSED</option>
+                          {INCIDENT_STATUSES.map((status) => (
+                            <option
+                              key={status}
+                              value={status}
+                              disabled={!canTransition(incident.status, status)}
+                            >
+                              {status}
+                            </option>
+                          ))}
                         </select>
 
                         <button
