@@ -1,5 +1,6 @@
 package com.telecom.network_monitor.service;
 
+import com.telecom.network_monitor.analytics.NodeStatusHistoryService;
 import com.telecom.network_monitor.dto.NodeDTO;
 import com.telecom.network_monitor.dto.NodeRequestDTO;
 import com.telecom.network_monitor.entity.Incident;
@@ -45,6 +46,9 @@ class NodeServiceTest {
     @Mock
     private LiveEventPublisher liveEvents;
 
+    @Mock
+    private NodeStatusHistoryService statusHistory;
+
     @InjectMocks
     private NodeService nodeService;
 
@@ -78,6 +82,7 @@ class NodeServiceTest {
         assertThat(node.getIncidents()).allMatch(Incident::isDeleted);
         verify(nodeRepository).save(node);
         verify(heartbeats).forget(1L);
+        verify(statusHistory).nodeDeleted(node);
         verify(liveEvents).nodeChanged(1L, "deleted");
     }
 

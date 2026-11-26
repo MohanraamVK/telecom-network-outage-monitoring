@@ -5,7 +5,8 @@ import PageLoader from "./components/common/PageLoader";
 import MainLayout from "./layout/MainLayout";
 import LoginPage from "./pages/LoginPage";
 
-// Pages are loaded on demand, so Chart.js only downloads when the dashboard opens.
+// Pages are loaded on demand, so each page's code downloads the first time it opens.
+const AnalyticsPage = lazy(() => import("./pages/AnalyticsPage"));
 const DashboardPage = lazy(() => import("./pages/DashboardPage"));
 const IncidentsPage = lazy(() => import("./pages/IncidentsPage"));
 const NodesPage = lazy(() => import("./pages/NodesPage"));
@@ -23,6 +24,7 @@ function AppRoutes() {
               <Route path="/" element={<DashboardPage />} />
               <Route path="/nodes" element={<NodesPage />} />
               <Route path="/incidents" element={<IncidentsPage />} />
+              <Route path="/analytics" element={<AnalyticsPage />} />
               <Route path="*" element={<NotFoundPage />} />
             </Route>
           </Route>

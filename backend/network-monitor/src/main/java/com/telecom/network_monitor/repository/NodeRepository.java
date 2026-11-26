@@ -35,6 +35,15 @@ public interface NodeRepository extends JpaRepository<Node, Long>, JpaSpecificat
 
     List<Node> findByDeletedFalseOrderByNameAsc();
 
+    /** Used by the demo-data seeder so history before "today" counts towards uptime. */
+    @Modifying
+    @Query("update Node n set n.createdAt = :at where n.id = :id")
+    int backdateCreatedAt(@Param("id") Long id, @Param("at") LocalDateTime at);
+
+    /** Newest persisted heartbeat across all nodes: roughly when this app was last running. */
+    @Query("select max(n.lastHeartbeatAt) from Node n")
+    LocalDateTime findLatestHeartbeat();
+
     /**
      * Bulk update that bypasses the entity's version check on purpose: a background
      * heartbeat write must never make an admin's concurrent edit fail.

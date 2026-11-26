@@ -1,212 +1,52 @@
-import { createContext, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { loginUser } from "../services/authService";
+import { createContext, useCallback, useEffect, useMemo, useSyncExternalStore } from "react";
+import { changePassword as changePasswordRequest, loginUser, logoutUser } from "../services/authService";
+import { clearSession, getSession, refreshSession, setSession, subscribe, tokenExpiry } from "../services/tokenStore";
 
 // eslint-disable-next-line react-refresh/only-export-components
 export const AuthContext = createContext(null);
 
-function parseJwt(token) {
-  try {
-    const payload = token.split(".")[1];
-
-    if (!payload) {
-      return null;
-    }
-
-    const base64 = payload.replace(/-/g, "+").replace(/_/g, "/");
-    const decoded = atob(base64);
-    const jsonPayload = decodeURIComponent(
-      decoded
-        .split("")
-        .map((char) => `%${`00${char.charCodeAt(0).toString(16)}`.slice(-2)}`)
-        .join("")
-    );
-
-    return JSON.parse(jsonPayload);
-  } catch (error) {
-    console.error("Failed to parse JWT:", error);
-    return null;
-  }
-}
-
-function getTokenExpiryTime(token) {
-  const decoded = parseJwt(token);
-
-  if (!decoded?.exp) {
-    return null;
-  }
-
-  return decoded.exp * 1000;
-}
-
-function isTokenExpired(token) {
-  const expiryTime = getTokenExpiryTime(token);
-
-  if (!expiryTime) {
-    return true;
-  }
-
-  return Date.now() >= expiryTime;
-}
-
-function getInitialToken() {
-  const storedToken = localStorage.getItem("telecom_token");
-
-  if (!storedToken) {
-    return null;
-  }
-
-  if (isTokenExpired(storedToken)) {
-    localStorage.removeItem("telecom_token");
-    localStorage.removeItem("telecom_user");
-    sessionStorage.setItem(
-      "auth_message",
-      "Your session has expired. Please log in again."
-    );
-    return null;
-  }
-
-  return storedToken;
-}
-
-function getInitialUser() {
-  const storedToken = localStorage.getItem("telecom_token");
-  const storedUser = localStorage.getItem("telecom_user");
-
-  if (!storedToken || !storedUser) {
-    return null;
-  }
-
-  if (isTokenExpired(storedToken)) {
-    localStorage.removeItem("telecom_token");
-    localStorage.removeItem("telecom_user");
-    return null;
-  }
-
-  try {
-    return JSON.parse(storedUser);
-  } catch (error) {
-    console.error("Failed to parse stored user:", error);
-    localStorage.removeItem("telecom_user");
-    return null;
-  }
-}
+/** Refresh this long before the access token expires (keeps the live stream authorised too). */
+const REFRESH_AHEAD_MS = 60_000;
 
 export function AuthProvider({ children }) {
-  const [token, setToken] = useState(getInitialToken);
-  const [user, setUser] = useState(getInitialUser);
-  const logoutTimerRef = useRef(null);
+  const session = useSyncExternalStore(subscribe, getSession);
+  const { token, refreshToken, user } = session;
 
-  const clearLogoutTimer = useCallback(() => {
-    if (logoutTimerRef.current) {
-      clearTimeout(logoutTimerRef.current);
-      logoutTimerRef.current = null;
-    }
-  }, []);
-
-  const logout = useCallback(({
-    redirectToLogin = true,
-    message = "",
-  } = {}) => {
-    clearLogoutTimer();
-
-    setToken(null);
-    setUser(null);
-
-    localStorage.removeItem("telecom_token");
-    localStorage.removeItem("telecom_user");
-
-    if (message) {
-      sessionStorage.setItem("auth_message", message);
-    }
-
-    if (redirectToLogin && window.location.pathname !== "/login") {
-      window.location.href = "/login";
-    }
-  }, [clearLogoutTimer]);
-
+  // Proactive refresh shortly before expiry; if it fails the session ends
   useEffect(() => {
-    clearLogoutTimer();
-
-    if (!token) {
-      localStorage.removeItem("telecom_token");
-      return;
-    }
-
-    const expiryTime = getTokenExpiryTime(token);
-
-    if (!expiryTime) {
-      localStorage.removeItem("telecom_token");
-      localStorage.removeItem("telecom_user");
-      sessionStorage.setItem(
-        "auth_message",
-        "Your session is invalid. Please log in again."
-      );
-
-      setTimeout(() => {
-        if (window.location.pathname !== "/login") {
-          window.location.href = "/login";
-        }
-      }, 0);
-
-      return;
-    }
-
-    const timeRemaining = expiryTime - Date.now();
-
-    if (timeRemaining <= 0) {
-      localStorage.removeItem("telecom_token");
-      localStorage.removeItem("telecom_user");
-      sessionStorage.setItem(
-        "auth_message",
-        "Your session has expired. Please log in again."
-      );
-
-      setTimeout(() => {
-        if (window.location.pathname !== "/login") {
-          window.location.href = "/login";
-        }
-      }, 0);
-
-      return;
-    }
-
-    localStorage.setItem("telecom_token", token);
-
-    logoutTimerRef.current = setTimeout(() => {
-      logout({
-        redirectToLogin: true,
-        message: "Your session has expired. Please log in again.",
+    if (!refreshToken) return undefined;
+    const expiry = token ? tokenExpiry(token) : null;
+    const delay = expiry ? Math.max(5_000, expiry - Date.now() - REFRESH_AHEAD_MS) : 0;
+    const timer = setTimeout(() => {
+      refreshSession().catch((error) => {
+        clearSession(error?.message || "Your session has expired. Please log in again.");
+        if (window.location.pathname !== "/login") window.location.href = "/login";
       });
-    }, timeRemaining);
-
-    return () => {
-      clearLogoutTimer();
-    };
-  }, [token, logout, clearLogoutTimer]);
-
-  useEffect(() => {
-    if (user) {
-      localStorage.setItem("telecom_user", JSON.stringify(user));
-    } else {
-      localStorage.removeItem("telecom_user");
-    }
-  }, [user]);
+    }, delay);
+    return () => clearTimeout(timer);
+  }, [token, refreshToken]);
 
   const login = useCallback(async (credentials) => {
     const data = await loginUser(credentials);
-
-    if (!data?.token || isTokenExpired(data.token)) {
-      throw new Error("Received an invalid or expired token.");
+    if (!data?.token) {
+      throw new Error("The server did not return a token.");
     }
-
-    setToken(data.token);
-    setUser({
-      username: data.username,
-      role: data.role,
-    });
-
+    setSession(data);
     sessionStorage.removeItem("auth_message");
+    return data;
+  }, []);
 
+  const logout = useCallback(({ redirectToLogin = true, message = "" } = {}) => {
+    logoutUser(getSession().refreshToken);
+    clearSession(message);
+    if (redirectToLogin && window.location.pathname !== "/login") {
+      window.location.href = "/login";
+    }
+  }, []);
+
+  const changePassword = useCallback(async (currentPassword, newPassword) => {
+    const data = await changePasswordRequest(currentPassword, newPassword);
+    setSession(data);
     return data;
   }, []);
 
@@ -214,13 +54,15 @@ export function AuthProvider({ children }) {
     () => ({
       token,
       user,
+      // An expired access token is fine: the refresh token renews it on the next request
       isAuthenticated: Boolean(token),
       // Only admins can change data; the public demo account (VIEWER) is read-only.
       canEdit: user?.role === "ADMIN",
       login,
       logout,
+      changePassword,
     }),
-    [token, user, login, logout]
+    [token, user, login, logout, changePassword]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

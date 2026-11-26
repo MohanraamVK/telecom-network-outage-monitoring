@@ -1,5 +1,6 @@
 package com.telecom.network_monitor.service;
 
+import com.telecom.network_monitor.analytics.NodeStatusHistoryService;
 import com.telecom.network_monitor.dto.IncidentDTO;
 import com.telecom.network_monitor.dto.NodeDTO;
 import com.telecom.network_monitor.dto.NodeRequestDTO;
@@ -41,16 +42,19 @@ public class NodeService {
     private final IncidentRepository incidentRepository;
     private final HeartbeatRegistry heartbeats;
     private final LiveEventPublisher liveEvents;
+    private final NodeStatusHistoryService statusHistory;
 
     @Autowired
     public NodeService(NodeRepository nodeRepository,
                        IncidentRepository incidentRepository,
                        HeartbeatRegistry heartbeats,
-                       LiveEventPublisher liveEvents) {
+                       LiveEventPublisher liveEvents,
+                       NodeStatusHistoryService statusHistory) {
         this.nodeRepository = nodeRepository;
         this.incidentRepository = incidentRepository;
         this.heartbeats = heartbeats;
         this.liveEvents = liveEvents;
+        this.statusHistory = statusHistory;
     }
 
     // ------------------------------------------------------------------ commands
@@ -64,6 +68,7 @@ public class NodeService {
         node.setDeleted(false);
 
         Node saved = nodeRepository.save(node);
+        statusHistory.recordTransition(saved, null, saved.getStatus(), false);
         liveEvents.nodeChanged(saved.getId(), "created");
         return convertToDTO(saved);
     }
@@ -74,11 +79,13 @@ public class NodeService {
                 .filter(n -> !n.isDeleted())
                 .orElseThrow(() -> new ResourceNotFoundException("Node not found with id: " + id));
 
+        NodeStatus previous = node.getStatus();
         node.setName(dto.getName().trim());
         node.setLocation(dto.getLocation().trim());
         node.setStatus(parseNodeStatus(dto.getStatus()));
 
         Node updated = nodeRepository.save(node);
+        statusHistory.recordTransition(updated, previous, updated.getStatus(), false);
         liveEvents.nodeChanged(updated.getId(), "updated");
         return convertToDTO(updated);
     }
@@ -99,6 +106,7 @@ public class NodeService {
         }
 
         nodeRepository.save(node);
+        statusHistory.nodeDeleted(node);
         heartbeats.forget(id);
         liveEvents.nodeChanged(id, "deleted");
         return "Node and its incidents soft deleted successfully!";
@@ -120,6 +128,7 @@ public class NodeService {
         }
 
         nodeRepository.save(node);
+        statusHistory.recordTransition(node, null, node.getStatus(), false);
         liveEvents.nodeChanged(id, "restored");
         return "Node restored successfully!";
     }

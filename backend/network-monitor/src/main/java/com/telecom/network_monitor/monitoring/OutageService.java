@@ -1,5 +1,6 @@
 package com.telecom.network_monitor.monitoring;
 
+import com.telecom.network_monitor.analytics.NodeStatusHistoryService;
 import com.telecom.network_monitor.entity.Node;
 import com.telecom.network_monitor.enums.IncidentSeverity;
 import com.telecom.network_monitor.enums.NodeStatus;
@@ -25,11 +26,14 @@ public class OutageService {
     private final NodeRepository nodeRepository;
     private final IncidentService incidentService;
     private final LiveEventPublisher liveEvents;
+    private final NodeStatusHistoryService statusHistory;
 
-    public OutageService(NodeRepository nodeRepository, IncidentService incidentService, LiveEventPublisher liveEvents) {
+    public OutageService(NodeRepository nodeRepository, IncidentService incidentService,
+                         LiveEventPublisher liveEvents, NodeStatusHistoryService statusHistory) {
         this.nodeRepository = nodeRepository;
         this.incidentService = incidentService;
         this.liveEvents = liveEvents;
+        this.statusHistory = statusHistory;
     }
 
     /** ACTIVE node went silent: mark it DOWN and open an incident. */
@@ -42,6 +46,7 @@ public class OutageService {
 
         node.setStatus(NodeStatus.DOWN);
         nodeRepository.save(node);
+        statusHistory.recordTransition(node, NodeStatus.ACTIVE, NodeStatus.DOWN, true);
 
         String description = "Heartbeat lost: " + node.getName() + " has not responded for "
                 + silentFor.toSeconds() + "s";
@@ -69,6 +74,7 @@ public class OutageService {
 
         node.setStatus(NodeStatus.ACTIVE);
         nodeRepository.save(node);
+        statusHistory.recordTransition(node, NodeStatus.DOWN, NodeStatus.ACTIVE, true);
         liveEvents.nodeChanged(nodeId, "recovered");
         return true;
     }

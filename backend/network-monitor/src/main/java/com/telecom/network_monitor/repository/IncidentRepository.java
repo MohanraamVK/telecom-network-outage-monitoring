@@ -42,6 +42,13 @@ public interface IncidentRepository extends JpaRepository<Incident, Long>, JpaSp
 
     List<Incident> findByDeletedFalseAndResolvedAtIsNotNull();
 
+    /** Incidents opened or resolved since {@code from}, with their node, for analytics. */
+    @Query("""
+            select i from Incident i join fetch i.node
+            where i.deleted = false and (i.createdAt >= :from or i.resolvedAt >= :from)
+            """)
+    List<Incident> findActiveSince(@Param("from") java.time.LocalDateTime from);
+
     /** Used by the demo-data seeder to create realistic history. */
     @org.springframework.data.jpa.repository.Modifying
     @Query("update Incident i set i.createdAt = :at where i.id = :id")

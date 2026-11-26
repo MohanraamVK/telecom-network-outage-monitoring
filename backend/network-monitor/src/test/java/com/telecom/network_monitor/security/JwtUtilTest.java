@@ -43,6 +43,19 @@ class JwtUtilTest {
                 .isInstanceOf(io.jsonwebtoken.ExpiredJwtException.class);
     }
 
+    @Test
+    void shortSecretIsRejectedAtStartup() {
+        JwtUtil util = new JwtUtil();
+        ReflectionTestUtils.setField(util, "jwtSecret", "too-short");
+        assertThatThrownBy(util::validateSecret).isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("at least 32 bytes");
+    }
+
+    @Test
+    void issuedAtIsReadable() {
+        assertThat(jwtUtil.extractIssuedAt(jwtUtil.generateToken("admin"))).isNotNull();
+    }
+
     private static JwtUtil jwtUtil(String secret, long expirationMs) {
         JwtUtil util = new JwtUtil();
         ReflectionTestUtils.setField(util, "jwtSecret", secret);

@@ -39,6 +39,8 @@ function IncidentsPage() {
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
   const [creating, setCreating] = useState(false);
+  // "/incidents?new=1" (from the command palette or the c shortcut) opens the raise-incident form
+  const createOpen = creating || (canEdit && params.get("new") === "1");
   const [nodeName, setNodeName] = useState("");
 
   const load = useCallback(async () => {
@@ -68,12 +70,17 @@ function IncidentsPage() {
     const next = new URLSearchParams(params);
     if (value == null) next.delete(key);
     else next.set(key, String(value));
-    setParams(next, { replace: key === "open" });
+    setParams(next, { replace: key === "open" || key === "new" });
+  };
+
+  const closeCreate = () => {
+    setCreating(false);
+    if (params.has("new")) setParam("new", null);
   };
 
   const save = async (values) => {
     const created = await createIncident(values);
-    setCreating(false);
+    closeCreate();
     showSuccess("Incident raised", `#${created.id} on ${created.nodeName}`);
     load();
   };
@@ -254,7 +261,7 @@ function IncidentsPage() {
         ) : null}
       </div>
 
-      {creating ? <IncidentFormModal open defaultNodeId={nodeId ?? ""} onClose={() => setCreating(false)} onSave={save} /> : null}
+      {createOpen ? <IncidentFormModal open defaultNodeId={nodeId ?? ""} onClose={closeCreate} onSave={save} /> : null}
 
       {openId ? (
         <IncidentDrawer

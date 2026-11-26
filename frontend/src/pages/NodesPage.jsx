@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import NodeFormModal from "../components/node/NodeFormModal";
 import { NodeStatusBadge } from "../components/ui/Badge";
 import Button from "../components/ui/Button";
@@ -33,6 +33,18 @@ function NodesPage() {
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
   const [editor, setEditor] = useState({ open: false, node: null });
+  const [params, setParams] = useSearchParams();
+  // "/nodes?new=1" (from the command palette) opens the add-node form
+  const editorOpen = editor.open || (canEdit && params.get("new") === "1");
+
+  const closeEditor = () => {
+    setEditor({ open: false, node: null });
+    if (params.has("new")) {
+      const next = new URLSearchParams(params);
+      next.delete("new");
+      setParams(next, { replace: true });
+    }
+  };
 
   const load = useCallback(async () => {
     try {
@@ -67,7 +79,7 @@ function NodesPage() {
       await createNode(values);
       showSuccess("Node added", values.name);
     }
-    setEditor({ open: false, node: null });
+    closeEditor();
     load();
   };
 
@@ -222,12 +234,12 @@ function NodesPage() {
         ) : null}
       </div>
 
-      {editor.open ? (
+      {editorOpen ? (
         <NodeFormModal
           key={editor.node?.id ?? "new"}
           open
           node={editor.node}
-          onClose={() => setEditor({ open: false, node: null })}
+          onClose={closeEditor}
           onSave={save}
         />
       ) : null}

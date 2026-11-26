@@ -1,6 +1,8 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "../hooks/useAuth";
-import { API_BASE_URL } from "../services/api";
+import { API_BASE_URL } from "../services/config";
+import { createSseParser } from "../services/sse";
+import { refreshSession } from "../services/tokenStore";
 
 /**
  * Live updates over Server-Sent Events.
@@ -35,21 +37,7 @@ export function LiveProvider({ children }) {
     let attempt = 0;
     let retryTimer = null;
 
-    const handleBlock = (block) => {
-      let event = "message";
-      const data = [];
-      for (const line of block.split("\n")) {
-        if (line.startsWith("event:")) event = line.slice(6).trim();
-        else if (line.startsWith("data:")) data.push(line.slice(5).replace(/^ /, ""));
-      }
-      if (data.length === 0 || event === "connected") return;
-
-      let payload;
-      try {
-        payload = JSON.parse(data.join("\n"));
-      } catch {
-        return;
-      }
+    const handleMessage = ({ event, payload }) => {
       if (event === "monitoring.snapshot") {
         setHealth(payload?.data?.nodes ?? []);
       }
@@ -64,9 +52,15 @@ export function LiveProvider({ children }) {
           signal: controller.signal,
           cache: "no-store",
         });
-        if (response.status === 401 || response.status === 403) {
+        if (response.status === 401) {
           setStatus("offline");
-          return; // the regular API calls handle logging out
+          // Token lapsed: refreshing changes the token, which reconnects this effect
+          refreshSession().catch(() => {});
+          return;
+        }
+        if (response.status === 403) {
+          setStatus("offline");
+          return;
         }
         if (!response.ok || !response.body) {
           throw new Error(`Stream failed with ${response.status}`);
@@ -76,16 +70,11 @@ export function LiveProvider({ children }) {
         attempt = 0;
 
         const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
-        let buffer = "";
+        const push = createSseParser(handleMessage);
         for (;;) {
           const { value, done } = await reader.read();
           if (done) break;
-          buffer += value.replace(/\r\n/g, "\n");
-          let boundary;
-          while ((boundary = buffer.indexOf("\n\n")) >= 0) {
-            handleBlock(buffer.slice(0, boundary));
-            buffer = buffer.slice(boundary + 2);
-          }
+          push(value);
         }
         throw new Error("Stream closed");
       } catch {

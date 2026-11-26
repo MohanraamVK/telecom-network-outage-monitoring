@@ -21,15 +21,32 @@ A full-stack dashboard for monitoring telecom network nodes (towers, routers) an
 - A **timeline** per incident records who did what and when: status changes, notes, and automatic detection and recovery.
 - Recent activity across all incidents on the overview.
 
+**Uptime and SLA analytics**
+- Every status change is stored as a period (down or in maintenance), so uptime is calculated from real history, not estimated.
+- The **Analytics** page shows network availability per day against the SLA target, incidents opened and resolved per day, average time to resolve, and 24-hour, 7-day and 30-day uptime per node with a meets/below-target verdict.
+- Planned maintenance doesn't count against uptime. After the free-tier server has been asleep, open outages are closed at the last time the app saw the network, so sleep doesn't show up as downtime.
+
+**Keyboard-first UI**
+- A command palette (`Ctrl`/`⌘` + `K`) jumps to any page, runs actions such as raising an incident, and searches nodes and incidents on the server.
+- Shortcuts: `g` then `o` / `n` / `i` / `a` to switch pages, `c` to raise an incident, and `?` for the full list.
+
 **Search and data**
 - Search, filtering, sorting and pagination happen in the database (JPA Specifications), with a whitelist of sortable fields. Severity sorts by rank, not alphabetically.
 - **Flyway** migrations version the schema on MySQL (existing databases are baselined automatically). TiDB Cloud rejects Flyway's history-table setup, so the TiDB deployment sets `FLYWAY_ENABLED=false` and lets Hibernate add new columns, with database defaults that keep existing rows valid.
 - Optimistic locking (`@Version`): two people editing the same item get a clear 409 instead of silently overwriting each other.
 - An empty database is seeded with a small Swedish network and incident history, so a fresh deployment looks alive.
 
-**Security and quality**
-- Stateless JWT auth. `ADMIN` can change data, and a read-only `VIEWER` demo account can only look (enforced by the API, not just hidden in the UI).
-- No secrets in the repo, consistent JSON errors, and 48 backend tests (unit, plus integration tests against the real migrations), with CI on every push.
+**Security**
+- Short-lived access tokens (15 minutes) with **rotating refresh tokens**. Refresh tokens are stored hashed and work once; reusing an old one signs out every session of that user, which shuts out a stolen token.
+- Login rate limiting: 5 failed attempts for a username from one address lock it for 15 minutes (`429` with `Retry-After`), plus a per-address limit.
+- Changing the password signs out every other session, including access tokens that haven't expired yet.
+- Security headers on every response (CSP, HSTS, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`), and the app refuses to start with a JWT secret shorter than 32 bytes.
+- `ADMIN` can change data, and a read-only `VIEWER` demo account can only look (enforced by the API, not just hidden in the UI).
+
+**Quality**
+- 90 backend tests: unit tests, plus API integration tests that start the real server on a random port and test it over HTTP (auth, lockout, token rotation, permissions, validation, the incident lifecycle, SSE and analytics).
+- 75 frontend tests with Vitest and Testing Library: the token refresh logic, the API client's retry, SSE parsing, the command palette, the login and analytics pages.
+- CI runs both on every push, with a JaCoCo coverage report for the backend.
 
 ## Tech stack
 
@@ -133,7 +150,11 @@ npm run dev                 # http://localhost:5173
 | `DB_URL` | `jdbc:mysql://localhost:3306/telecomdb?...` | JDBC URL |
 | `DB_USERNAME` / `DB_PASSWORD` | `root` / *(empty)* | Database credentials |
 | `JWT_SECRET` | dev-only value | HMAC key for tokens, **at least 32 characters**. Generate one with `openssl rand -base64 48` |
-| `JWT_EXPIRATION_MS` | `86400000` (24 h) | Token lifetime |
+| `JWT_EXPIRATION_MS` | `900000` (15 min) | Access token lifetime |
+| `JWT_REFRESH_EXPIRATION` | `7d` | Refresh token lifetime |
+| `LOGIN_MAX_ATTEMPTS` / `LOGIN_LOCK_DURATION` | `5` / `15m` | Failed logins before a username is locked, and for how long |
+| `SLA_TARGET_PERCENT` | `99.5` | Uptime target used on the Analytics page |
+| `ANALYTICS_TIME_ZONE` | `Europe/Stockholm` | Where analytics days start and end |
 | `CORS_ALLOWED_ORIGINS` | `http://localhost:5173` | Comma-separated browser origins |
 | `ADMIN_USERNAME` / `ADMIN_PASSWORD` | `admin` / `admin123` | Account created on first start |
 | `DEMO_ENABLED`, `DEMO_USERNAME`, `DEMO_PASSWORD` | `false`, `demo`, `demo123` | Optional read-only demo account |
@@ -147,11 +168,15 @@ npm run dev                 # http://localhost:5173
 
 ## API overview
 
-All endpoints except login and the docs need an `Authorization: Bearer <token>` header. In Swagger UI, click **Authorize** and paste the token.
+All endpoints except login, refresh, logout and the docs need an `Authorization: Bearer <token>` header. In Swagger UI, click **Authorize** and paste the token.
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `POST` | `/api/auth/login` | Exchange username/password for a JWT |
+| `POST` | `/api/auth/login` | Exchange username/password for an access token and a refresh token |
+| `POST` | `/api/auth/refresh` | Swap a refresh token for a new pair (each refresh token works once) |
+| `POST` | `/api/auth/logout` | Revoke a refresh token |
+| `GET` · `POST` | `/api/auth/me` · `/api/auth/change-password` | Current user; change password (signs out other sessions) |
+| `GET` | `/api/analytics?days=30` | Availability per day, incident trends and uptime per node (1 to 90 days) |
 | `GET` | `/api/events/stream` | **Server-Sent Events**: `node.changed`, `incident.changed`, `monitoring.snapshot` |
 | `GET` | `/api/dashboard/summary` | All dashboard metrics (counts, availability, MTTR) |
 | `GET` | `/api/monitoring/nodes` | Live health per node: status, last heartbeat, latency history |
@@ -183,17 +208,18 @@ curl -s localhost:8080/api/dashboard/summary -H "Authorization: Bearer $TOKEN" |
 ## Testing
 
 ```bash
-cd backend/network-monitor && ./mvnw test     # JUnit 5 + Mockito, H2 in-memory
-cd frontend && npm run lint && npm run build
+cd backend/network-monitor && ./mvnw verify   # unit + HTTP integration tests on H2; coverage in target/site/jacoco
+cd frontend && npm test && npm run lint && npm run build
 ```
 
-GitHub Actions runs both on every push and pull request.
+GitHub Actions runs all of this on every push and pull request, and uploads the coverage report as a build artifact.
 
 ## Project structure
 
 ```
 ├── backend/network-monitor     Spring Boot API
 │   └── src/main/java/com/telecom/network_monitor
+│       ├── analytics           Status history, uptime and SLA calculations
 │       ├── config              Security, CORS, OpenAPI, scheduling, seed data
 │       ├── controller          REST endpoints
 │       ├── dto                 Request/response models
@@ -203,11 +229,11 @@ GitHub Actions runs both on every push and pull request.
 │       ├── realtime            Server-Sent Events stream
 │       ├── search              Specifications and safe sorting
 │       ├── repository          Spring Data JPA
-│       ├── security            JWT filter and utilities
+│       ├── security            JWT filter, refresh tokens, login rate limiting
 │       └── service             Business logic and metrics
 │   └── src/main/resources/db/migration   Flyway SQL migrations
 ├── frontend                    React + Vite SPA
-│   └── src  (pages, components/ui, context incl. live SSE, services, utils)
+│   └── src  (pages, components incl. charts and command palette, context, services, utils; tests sit next to the code)
 ├── docker-compose.yml          MySQL + API + SPA
 └── .github/workflows/ci.yml    CI pipeline
 ```
@@ -215,7 +241,7 @@ GitHub Actions runs both on every push and pull request.
 ## Roadmap
 
 - Notification channels (email or Slack) when a critical incident opens
-- Per-node SLA targets and monthly availability reports
+- Per-node SLA targets and downloadable monthly availability reports
 - Real device agents in place of the simulator
 
 ## Author

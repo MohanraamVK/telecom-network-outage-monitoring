@@ -22,8 +22,31 @@ jobs:
           cache: maven
 
       # Tests use an in-memory H2 database (src/test/resources), so no MySQL is needed
-      - name: Build and test
+      - name: Build, test and measure coverage
         run: mvn -B verify
+
+      - name: Coverage summary
+        if: always()
+        run: |
+          python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import csv, os
+          path = "target/site/jacoco/jacoco.csv"
+          if not os.path.exists(path):
+              print("No coverage report found.")
+          else:
+              missed = covered = 0
+              for row in csv.DictReader(open(path)):
+                  missed += int(row["LINE_MISSED"]); covered += int(row["LINE_COVERED"])
+              total = missed + covered
+              print(f"### Backend line coverage: {100 * covered / total:.1f}% ({covered}/{total} lines)")
+          PY
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-coverage
+          path: backend/network-monitor/target/site/jacoco/
 
   frontend:
     name: Frontend (React + Vite)
@@ -42,4 +65,5 @@ jobs:
 
       - run: npm ci
       - run: npm run lint
+      - run: npm test
       - run: npm run build

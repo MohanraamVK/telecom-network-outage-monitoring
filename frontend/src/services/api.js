@@ -1,52 +1,64 @@
 import axios from "axios";
+import { API_BASE_URL } from "./config";
+import { clearSession, getSession, isExpired, refreshSession, SessionExpiredError } from "./tokenStore";
 
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080/api";
+export { API_BASE_URL };
 
 const api = axios.create({
   baseURL: API_BASE_URL,
   timeout: 15000,
 });
 
-function redirectToLoginWithMessage(message) {
-  localStorage.removeItem("telecom_token");
-  localStorage.removeItem("telecom_user");
+const AUTH_ENDPOINTS = ["/auth/login", "/auth/refresh", "/auth/logout"];
+const isAuthEndpoint = (url = "") => AUTH_ENDPOINTS.some((path) => url.includes(path));
 
-  if (message) {
-    sessionStorage.setItem("auth_message", message);
-  }
-
+function endSession(message) {
+  clearSession(message || "Your session has expired. Please log in again.");
   if (window.location.pathname !== "/login") {
     window.location.href = "/login";
   }
 }
 
-api.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem("telecom_token");
+api.interceptors.request.use(async (config) => {
+  if (isAuthEndpoint(config.url)) return config;
 
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
+  let { token, refreshToken } = getSession();
+  // Refresh up front if the access token is about to expire, to avoid a wasted 401
+  if (refreshToken && isExpired(token, 10000)) {
+    try {
+      token = await refreshSession();
+    } catch {
+      // fall through: the 401 handler below ends the session
     }
-
-    return config;
-  },
-  (error) => Promise.reject(error)
-);
+  }
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
 
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
-    const status = error.response?.status;
-    const isLoginRequest = error.config?.url?.includes("/auth/login");
-    const backendMessage =
-      error.response?.data?.message ||
-      error.response?.data?.error ||
-      "Your session has expired. Please log in again.";
-
-    if (status === 401 && !isLoginRequest) {
-      redirectToLoginWithMessage(backendMessage);
+  async (error) => {
+    const { config, response } = error;
+    if (response?.status !== 401 || !config || isAuthEndpoint(config.url)) {
+      return Promise.reject(error);
     }
 
+    // One silent retry with a refreshed token
+    if (!config._retried && getSession().refreshToken) {
+      config._retried = true;
+      try {
+        const token = await refreshSession();
+        config.headers.Authorization = `Bearer ${token}`;
+        return api(config);
+      } catch (refreshError) {
+        endSession(refreshError instanceof SessionExpiredError ? refreshError.message : undefined);
+        return Promise.reject(error);
+      }
+    }
+
+    endSession(response.data?.message);
     return Promise.reject(error);
   }
 );

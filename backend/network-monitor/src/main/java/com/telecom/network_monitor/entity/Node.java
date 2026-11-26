@@ -3,6 +3,7 @@ package com.telecom.network_monitor.entity;
 import com.telecom.network_monitor.enums.NodeStatus;
 import jakarta.persistence.*;
 import org.hibernate.annotations.ColumnDefault;
+import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -34,6 +35,10 @@ public class Node {
     @Column(nullable = false)
     @ColumnDefault("true")
     private boolean monitored = true;
+
+    @CreationTimestamp
+    @Column(name = "created_at", updatable = false)
+    private LocalDateTime createdAt;
 
     @Version
     @Column(nullable = false)
@@ -116,5 +121,13 @@ public class Node {
 
     public void setVersion(Long version) {
         this.version = version;
+    }
+
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
+    }
+
+    public void setCreatedAt(LocalDateTime createdAt) {
+        this.createdAt = createdAt;
     }
 }

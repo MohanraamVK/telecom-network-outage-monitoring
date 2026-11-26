@@ -19,6 +19,10 @@ public class User {
     @Column(nullable = false, length = 50)
     private String role;
 
+    /** Access tokens issued before this moment are rejected. */
+    @Column(name = "password_changed_at")
+    private java.time.LocalDateTime passwordChangedAt;
+
     public User() {
     }
 
@@ -65,5 +69,13 @@ public class User {
 
     public void setRole(String role) {
         this.role = role;
+    }
+
+    public java.time.LocalDateTime getPasswordChangedAt() {
+        return passwordChangedAt;
+    }
+
+    public void setPasswordChangedAt(java.time.LocalDateTime passwordChangedAt) {
+        this.passwordChangedAt = passwordChangedAt;
     }
 }
