@@ -48,16 +48,15 @@ function SortControls({
 
 const styles = {
   container: {
-    display: "flex",
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
     gap: "16px",
-    flexWrap: "wrap",
+    width: "100%",
   },
   field: {
     display: "flex",
     flexDirection: "column",
     gap: "6px",
-    minWidth: "220px",
-    flex: "1 1 220px",
   },
   label: {
     fontSize: "13px",

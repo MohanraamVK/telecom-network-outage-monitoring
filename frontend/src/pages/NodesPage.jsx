@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import EmptyState from "../components/common/EmptyState";
 import PageControlsCard from "../components/common/PageControlsCard";
 import Pagination from "../components/common/Pagination";
 import SearchBar from "../components/common/SearchBar";
@@ -255,6 +256,11 @@ function NodesPage() {
     setCurrentPage(1);
   };
 
+  const handleClearSearch = () => {
+    setSearchTerm("");
+    setCurrentPage(1);
+  };
+
   return (
     <div style={styles.page}>
       <h2>Nodes Management</h2>
@@ -315,6 +321,19 @@ function NodesPage() {
         />
       ) : pageError ? (
         <p style={styles.error}>{pageError}</p>
+      ) : sortedNodes.length === 0 ? (
+        <EmptyState
+          title={showDeleted ? "No deleted nodes found" : "No active nodes found"}
+          description={
+            searchTerm
+              ? "Try adjusting your search or clear the search term."
+              : showDeleted
+              ? "Deleted nodes will appear here."
+              : "Start by adding a new node."
+          }
+          actionLabel={searchTerm ? "Clear Search" : undefined}
+          onAction={searchTerm ? handleClearSearch : undefined}
+        />
       ) : (
         <>
           <NodeTable

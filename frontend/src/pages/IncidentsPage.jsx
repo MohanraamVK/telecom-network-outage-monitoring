@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
+import EmptyState from "../components/common/EmptyState";
 import PageControlsCard from "../components/common/PageControlsCard";
 import Pagination from "../components/common/Pagination";
-import SearchBar from "../components/common/SearchBar";
-import SortControls from "../components/common/SortControls";
 import TableSkeleton from "../components/common/TableSkeleton";
 import ViewToggle from "../components/common/ViewToggle";
 import IncidentForm from "../components/incident/IncidentForm";
@@ -33,17 +32,8 @@ function IncidentsPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(5);
 
-  const { showSuccess, showError, showInfo, showWarning } = useToast();
+  const { showSuccess, showError, showWarning } = useToast();
   const { confirm } = useConfirmation();
-
-  const sortOptions = [
-    { value: "id", label: "ID" },
-    { value: "description", label: "Description" },
-    { value: "severity", label: "Severity" },
-    { value: "status", label: "Status" },
-    { value: "nodeId", label: "Node ID" },
-    { value: "nodeName", label: "Node Name" },
-  ];
 
   const extractIncidentArray = (response) => {
     if (Array.isArray(response?.data)) {
@@ -63,8 +53,7 @@ function IncidentsPage() {
     try {
       const response = await getDeletedNodes();
       const deletedNodes = extractNodeArray(response);
-      const ids = deletedNodes.map((node) => node.id);
-      setDeletedNodeIds(ids);
+      setDeletedNodeIds(deletedNodes.map((node) => node.id));
     } catch (error) {
       console.error("Fetch deleted nodes error:", error);
       setDeletedNodeIds([]);
@@ -73,15 +62,13 @@ function IncidentsPage() {
 
   const fetchActiveIncidents = async () => {
     const response = await getAllIncidents();
-    const extractedIncidents = extractIncidentArray(response);
-    setIncidents(extractedIncidents);
+    setIncidents(extractIncidentArray(response));
     setCurrentPage(1);
   };
 
   const fetchDeletedIncidents = async () => {
     const response = await getDeletedIncidents();
-    const extractedIncidents = extractIncidentArray(response);
-    setIncidents(extractedIncidents);
+    setIncidents(extractIncidentArray(response));
     setCurrentPage(1);
   };
 
@@ -203,7 +190,8 @@ function IncidentsPage() {
   const handleDeleteIncident = async (id) => {
     const confirmed = await confirm({
       title: "Delete Incident",
-      message: "Are you sure you want to delete this incident? It will be moved to deleted records.",
+      message:
+        "Are you sure you want to delete this incident? It will be moved to deleted records.",
       confirmText: "Delete",
       cancelText: "Cancel",
       confirmVariant: "danger",
@@ -263,7 +251,6 @@ function IncidentsPage() {
     setSearchTerm("");
     setCurrentPage(1);
     await fetchActiveIncidents();
-    showInfo("Showing active incidents", "Active incidents list loaded.");
   };
 
   const handleShowDeleted = async () => {
@@ -271,21 +258,20 @@ function IncidentsPage() {
     setShowDeleted(true);
     setCurrentPage(1);
     await Promise.all([fetchDeletedIncidents(), fetchDeletedNodeIds()]);
-    showInfo("Showing deleted incidents", "Deleted incidents list loaded.");
   };
 
-  const handleSearchChange = (value) => {
-    setSearchTerm(value);
+  const handleSearchChange = (event) => {
+    setSearchTerm(event.target.value);
     setCurrentPage(1);
   };
 
-  const handleSortByChange = (value) => {
-    setSortBy(value);
+  const handleSortByChange = (event) => {
+    setSortBy(event.target.value);
     setCurrentPage(1);
   };
 
-  const handleSortOrderChange = (value) => {
-    setSortOrder(value);
+  const handleSortOrderChange = (event) => {
+    setSortOrder(event.target.value);
     setCurrentPage(1);
   };
 
@@ -299,6 +285,11 @@ function IncidentsPage() {
     setCurrentPage(1);
   };
 
+  const handleClearSearch = () => {
+    setSearchTerm("");
+    setCurrentPage(1);
+  };
+
   return (
     <div style={styles.page}>
       <h2>Incidents Management</h2>
@@ -309,33 +300,59 @@ function IncidentsPage() {
         title="Incident Controls"
         subtitle="Search, sort, and switch between active and deleted incidents."
       >
-        <ViewToggle
-          activeLabel="Show Active Incidents"
-          deletedLabel="Show Deleted Incidents"
-          showDeleted={showDeleted}
-          onShowActive={handleShowActive}
-          onShowDeleted={handleShowDeleted}
-        />
-
-        <div style={styles.controlGrid}>
-          <SearchBar
-            value={searchTerm}
-            onChange={handleSearchChange}
-            placeholder={
-              showDeleted
-                ? "Search deleted incidents by description, severity, status, node id, or node name"
-                : "Search incidents by description, severity, status, node id, or node name"
-            }
+        <div style={styles.toggleRow}>
+          <ViewToggle
+            activeLabel="Active"
+            deletedLabel="Deleted"
+            showDeleted={showDeleted}
+            onShowActive={handleShowActive}
+            onShowDeleted={handleShowDeleted}
           />
+        </div>
 
-          <SortControls
-            sortBy={sortBy}
-            sortOrder={sortOrder}
-            onSortByChange={handleSortByChange}
-            onSortOrderChange={handleSortOrderChange}
-            options={sortOptions}
-            label="Sort incidents by"
-          />
+        <div style={styles.controlsGrid}>
+          <div style={styles.controlField}>
+            <label style={styles.label}>Search</label>
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={handleSearchChange}
+              placeholder={
+                showDeleted
+                  ? "Search deleted incidents by description, severity, status, node id, or node name"
+                  : "Search incidents by description, severity, status, node id, or node name"
+              }
+              style={styles.input}
+            />
+          </div>
+
+          <div style={styles.controlField}>
+            <label style={styles.label}>Sort by</label>
+            <select
+              value={sortBy}
+              onChange={handleSortByChange}
+              style={styles.select}
+            >
+              <option value="id">ID</option>
+              <option value="description">Description</option>
+              <option value="severity">Severity</option>
+              <option value="status">Status</option>
+              <option value="nodeId">Node ID</option>
+              <option value="nodeName">Node Name</option>
+            </select>
+          </div>
+
+          <div style={styles.controlField}>
+            <label style={styles.label}>Sort order</label>
+            <select
+              value={sortOrder}
+              onChange={handleSortOrderChange}
+              style={styles.select}
+            >
+              <option value="asc">Ascending</option>
+              <option value="desc">Descending</option>
+            </select>
+          </div>
         </div>
       </PageControlsCard>
 
@@ -346,9 +363,27 @@ function IncidentsPage() {
       )}
 
       {loading ? (
-        <TableSkeleton rows={5} columns={7} title={showDeleted ? "Loading deleted incidents..." : "Loading active incidents..."} />
+        <TableSkeleton
+          rows={5}
+          columns={7}
+          title={showDeleted ? "Loading deleted incidents..." : "Loading active incidents..."}
+        />
       ) : pageError ? (
         <p style={styles.error}>{pageError}</p>
+      ) : sortedIncidents.length === 0 ? (
+        <EmptyState
+          icon={showDeleted ? "🗑️" : "🚨"}
+          title={showDeleted ? "No deleted incidents found" : "No incidents found"}
+          description={
+            searchTerm
+              ? "Try adjusting your search or clear the search term."
+              : showDeleted
+              ? "Deleted incidents will appear here."
+              : "Start by creating a new incident."
+          }
+          actionLabel={searchTerm ? "Clear Search" : undefined}
+          onAction={searchTerm ? handleClearSearch : undefined}
+        />
       ) : (
         <>
           <IncidentTable
@@ -380,11 +415,42 @@ const styles = {
     margin: "30px auto",
     padding: "20px",
   },
-  controlGrid: {
+  toggleRow: {
+    width: "100%",
+  },
+  controlsGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
     gap: "16px",
-    alignItems: "start",
+    alignItems: "end",
+  },
+  controlField: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "6px",
+    minWidth: 0,
+  },
+  label: {
+    fontSize: "13px",
+    fontWeight: "600",
+    color: "#374151",
+  },
+  input: {
+    width: "100%",
+    padding: "10px 12px",
+    borderRadius: "8px",
+    border: "1px solid #d1d5db",
+    fontSize: "14px",
+    backgroundColor: "#fff",
+    outline: "none",
+  },
+  select: {
+    width: "100%",
+    padding: "10px 12px",
+    borderRadius: "8px",
+    border: "1px solid #d1d5db",
+    fontSize: "14px",
+    backgroundColor: "#fff",
   },
   infoText: {
     marginBottom: "15px",

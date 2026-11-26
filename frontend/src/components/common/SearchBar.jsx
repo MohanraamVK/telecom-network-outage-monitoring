@@ -19,8 +19,7 @@ const styles = {
     display: "flex",
     flexDirection: "column",
     gap: "6px",
-    minWidth: "260px",
-    flex: "1 1 320px",
+    width: "100%",
   },
   label: {
     fontSize: "13px",

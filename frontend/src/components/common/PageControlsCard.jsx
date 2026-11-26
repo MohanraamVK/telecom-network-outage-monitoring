@@ -20,11 +20,11 @@ const styles = {
     marginBottom: "20px",
   },
   header: {
-    marginBottom: "14px",
+    marginBottom: "16px",
   },
   title: {
     margin: 0,
-    fontSize: "18px",
+    fontSize: "20px",
     color: "#111827",
   },
   subtitle: {
