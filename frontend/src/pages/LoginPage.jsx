@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
+import Button from "../components/ui/Button";
+import { TextField } from "../components/ui/Field";
 import { useAuth } from "../hooks/useAuth";
+import { errorMessage } from "../services/errors";
 
 // Only show the seeded demo login in development, or when explicitly enabled
 // (e.g. for a public portfolio demo) via VITE_SHOW_DEMO_CREDENTIALS=true.
-const SHOW_DEMO_CREDENTIALS =
-  import.meta.env.DEV || import.meta.env.VITE_SHOW_DEMO_CREDENTIALS === "true";
+const SHOW_DEMO_CREDENTIALS = import.meta.env.DEV || import.meta.env.VITE_SHOW_DEMO_CREDENTIALS === "true";
 const DEMO_USERNAME = import.meta.env.VITE_DEMO_USERNAME || "admin";
 const DEMO_PASSWORD = import.meta.env.VITE_DEMO_PASSWORD || "admin123";
 const DEMO_IS_READ_ONLY = Boolean(import.meta.env.VITE_DEMO_USERNAME);
@@ -13,19 +15,14 @@ const DEMO_IS_READ_ONLY = Boolean(import.meta.env.VITE_DEMO_USERNAME);
 function LoginPage() {
   const { login, isAuthenticated } = useAuth();
   const navigate = useNavigate();
-
-  const [formData, setFormData] = useState({
-    username: "",
-    password: "",
-  });
+  const [form, setForm] = useState({ username: "", password: "" });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    const sessionMessage = sessionStorage.getItem("auth_message");
-
-    if (sessionMessage) {
-      setError(sessionMessage);
+    const message = sessionStorage.getItem("auth_message");
+    if (message) {
+      setError(message);
       sessionStorage.removeItem("auth_message");
     }
   }, []);
@@ -34,207 +31,117 @@ function LoginPage() {
     return <Navigate to="/" replace />;
   }
 
-  const handleChange = (event) => {
-    const { name, value } = event.target;
-
+  const set = (field) => (event) => {
     setError("");
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
+    setForm((prev) => ({ ...prev, [field]: event.target.value }));
   };
 
   const handleSubmit = async (event) => {
     event.preventDefault();
-    setError("");
-
-    if (!formData.username.trim() || !formData.password.trim()) {
-      setError("Username and password are required.");
+    if (!form.username.trim() || !form.password) {
+      setError("Enter your username and password.");
       return;
     }
-
     try {
       setLoading(true);
-      await login(formData);
+      await login(form);
       navigate("/", { replace: true });
     } catch (err) {
-      console.error("Login error:", err);
-
-      const backendMessage =
-        err?.response?.data?.message ||
-        err?.response?.data?.error ||
-        err?.message ||
-        "Login failed. Please try again.";
-
-      setError(backendMessage);
+      setError(errorMessage(err, "Login failed. Try again."));
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div style={styles.page}>
-      <div style={styles.card}>
-        <div style={styles.header}>
-          <div style={styles.logo}>📡</div>
-          <h1 style={styles.title}>Telecom Login</h1>
-          <p style={styles.subtitle}>Sign in to continue</p>
+    <div className="grid min-h-screen lg:grid-cols-[1.1fr_1fr]">
+      <section className="relative hidden overflow-hidden border-r border-fjord-800 bg-fjord-900 lg:flex lg:flex-col lg:justify-between lg:p-12">
+        <SignalField />
+        <div className="relative flex items-center gap-2.5">
+          <span className="size-2.5 rounded-full bg-signal" />
+          <span className="font-display text-lg font-semibold">Outage Monitor</span>
         </div>
+        <div className="relative max-w-md">
+          <p className="font-display text-4xl leading-tight font-semibold tracking-tight">
+            Know which tower went quiet before the first customer calls.
+          </p>
+          <p className="mt-4 text-fjord-300">
+            Live heartbeats from every node, automatic outage detection and a full timeline for each incident.
+          </p>
+        </div>
+      </section>
 
-        {error ? <p style={styles.error}>{error}</p> : null}
+      <section className="flex items-center justify-center px-6 py-12">
+        <div className="w-full max-w-sm">
+          <h1 className="font-display text-3xl font-semibold tracking-tight">Log in</h1>
+          <p className="mt-1 text-fjord-400">to the network operations console</p>
 
-        <form onSubmit={handleSubmit} style={styles.form}>
-          <div style={styles.field}>
-            <label htmlFor="username" style={styles.label}>Username</label>
-            <input
-              id="username"
-              type="text"
-              name="username"
-              value={formData.username}
-              onChange={handleChange}
-              placeholder="Enter username"
-              style={styles.input}
-              autoComplete="username"
-            />
-          </div>
-
-          <div style={styles.field}>
-            <label htmlFor="password" style={styles.label}>Password</label>
-            <input
-              id="password"
-              type="password"
+          <form onSubmit={handleSubmit} className="mt-8 space-y-4" noValidate>
+            {error ? (
+              <p role="alert" className="rounded-md border border-outage/30 bg-outage/10 px-3 py-2 text-sm text-outage">
+                {error}
+              </p>
+            ) : null}
+            <TextField label="Username" name="username" autoComplete="username" value={form.username} onChange={set("username")} />
+            <TextField
+              label="Password"
               name="password"
-              value={formData.password}
-              onChange={handleChange}
-              placeholder="Enter password"
-              style={styles.input}
+              type="password"
               autoComplete="current-password"
+              value={form.password}
+              onChange={set("password")}
             />
-          </div>
+            <Button type="submit" variant="primary" className="w-full" disabled={loading}>
+              {loading ? "Logging in…" : "Log in"}
+            </Button>
+          </form>
 
-          <button type="submit" disabled={loading} style={styles.button}>
-            {loading ? "Signing in..." : "Login"}
-          </button>
-        </form>
-
-        {SHOW_DEMO_CREDENTIALS ? (
-          <div style={styles.demoBox}>
-            <p style={styles.demoText}>
-              <strong>{DEMO_IS_READ_ONLY ? "Demo account (read-only)" : "Seeded admin user"}</strong>
-            </p>
-            <p style={styles.demoText}>Username: {DEMO_USERNAME}</p>
-            <p style={styles.demoText}>Password: {DEMO_PASSWORD}</p>
-            <button
-              type="button"
-              style={styles.demoButton}
-              onClick={() => {
-                setError("");
-                setFormData({ username: DEMO_USERNAME, password: DEMO_PASSWORD });
-              }}
-            >
-              Fill in demo login
-            </button>
-          </div>
-        ) : null}
-      </div>
+          {SHOW_DEMO_CREDENTIALS ? (
+            <div className="mt-8 rounded-md border border-fjord-800 bg-fjord-900 p-4 text-sm">
+              <p className="font-semibold text-fjord-100">
+                {DEMO_IS_READ_ONLY ? "Try the read-only demo" : "Seeded admin account"}
+              </p>
+              <p className="mt-1 text-fjord-400">
+                {DEMO_USERNAME} / {DEMO_PASSWORD}
+              </p>
+              <Button
+                size="sm"
+                className="mt-3"
+                onClick={() => {
+                  setError("");
+                  setForm({ username: DEMO_USERNAME, password: DEMO_PASSWORD });
+                }}
+              >
+                Fill in demo login
+              </Button>
+            </div>
+          ) : null}
+        </div>
+      </section>
     </div>
   );
 }
 
-const styles = {
-  page: {
-    minHeight: "100vh",
-    backgroundColor: "#f3f4f6",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: "20px",
-  },
-  card: {
-    width: "100%",
-    maxWidth: "420px",
-    backgroundColor: "#ffffff",
-    borderRadius: "14px",
-    boxShadow: "0 8px 24px rgba(0,0,0,0.08)",
-    padding: "28px",
-  },
-  header: {
-    textAlign: "center",
-    marginBottom: "20px",
-  },
-  logo: {
-    fontSize: "38px",
-    marginBottom: "8px",
-  },
-  title: {
-    margin: 0,
-    color: "#111827",
-  },
-  subtitle: {
-    margin: "8px 0 0 0",
-    color: "#6b7280",
-    fontSize: "14px",
-  },
-  error: {
-    color: "#c62828",
-    fontSize: "14px",
-    marginBottom: "12px",
-    textAlign: "center",
-  },
-  form: {
-    display: "flex",
-    flexDirection: "column",
-    gap: "14px",
-  },
-  field: {
-    display: "flex",
-    flexDirection: "column",
-    gap: "6px",
-  },
-  label: {
-    fontSize: "13px",
-    fontWeight: "600",
-    color: "#374151",
-  },
-  input: {
-    padding: "11px 12px",
-    borderRadius: "8px",
-    border: "1px solid #d1d5db",
-    fontSize: "14px",
-  },
-  button: {
-    marginTop: "6px",
-    backgroundColor: "#1565C0",
-    color: "#ffffff",
-    border: "none",
-    borderRadius: "8px",
-    padding: "11px 14px",
-    cursor: "pointer",
-    fontWeight: "600",
-  },
-  demoBox: {
-    marginTop: "18px",
-    padding: "12px",
-    backgroundColor: "#f9fafb",
-    border: "1px solid #e5e7eb",
-    borderRadius: "8px",
-  },
-  demoButton: {
-    marginTop: "8px",
-    border: "1px solid #D1D5DB",
-    backgroundColor: "#FFFFFF",
-    color: "#1565C0",
-    borderRadius: "6px",
-    padding: "6px 10px",
-    cursor: "pointer",
-    fontWeight: "600",
-    fontSize: "13px",
-  },
-  demoText: {
-    margin: "2px 0",
-    fontSize: "13px",
-    color: "#4b5563",
-  },
-};
+/** Decorative map of node sites with radiating signal rings. */
+function SignalField() {
+  const sites = [
+    [62, 70], [70, 58], [58, 48], [76, 38], [48, 30], [66, 22], [40, 62], [82, 80],
+  ];
+  return (
+    <svg className="absolute inset-0 h-full w-full" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+      {sites.map(([x, y], i) =>
+        sites.slice(i + 1, i + 3).map(([x2, y2]) => (
+          <line key={`${i}-${x2}`} x1={x} y1={y} x2={x2} y2={y2} className="stroke-fjord-700" strokeWidth="0.15" />
+        ))
+      )}
+      {sites.map(([x, y], i) => (
+        <g key={i}>
+          <circle cx={x} cy={y} r="3.5" className={i === 3 ? "fill-outage/10 stroke-outage/40" : "fill-signal/5 stroke-signal/25"} strokeWidth="0.15" />
+          <circle cx={x} cy={y} r="0.8" className={i === 3 ? "fill-outage" : "fill-signal"} />
+        </g>
+      ))}
+    </svg>
+  );
+}
 
 export default LoginPage;

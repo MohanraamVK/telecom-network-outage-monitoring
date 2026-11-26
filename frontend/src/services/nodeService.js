@@ -1,36 +1,26 @@
 import api from "./api";
 
-export const getAllNodes = async () => {
-  const response = await api.get("/nodes");
-  return response.data;
-};
+const unwrap = (response) => response.data?.data;
 
-export const getDeletedNodes = async () => {
-  const response = await api.get("/nodes/deleted");
-  return response.data;
-};
+/** Server-side search: { q, status, deleted, page, size, sort } -> { content, page, size, totalElements, totalPages } */
+export const searchNodes = async (params) =>
+  unwrap(await api.get("/nodes/search", { params: clean(params) }));
 
-export const createNode = async (nodeData) => {
-  const response = await api.post("/nodes", nodeData);
-  return response.data;
-};
+/** All active nodes (id, name, location, status) for dropdowns. */
+export const getNodeOptions = async () => unwrap(await api.get("/nodes/options")) ?? [];
 
-export const updateNode = async (id, nodeData) => {
-  const response = await api.put(`/nodes/${id}`, nodeData);
-  return response.data;
-};
+export const createNode = async (node) => unwrap(await api.post("/nodes", node));
 
-export const deleteNode = async (id) => {
-  const response = await api.delete(`/nodes/${id}`);
-  return response.data;
-};
+export const updateNode = async (id, node) => unwrap(await api.put(`/nodes/${id}`, node));
 
-export const restoreNode = async (id) => {
-  const response = await api.put(`/nodes/${id}/restore`);
-  return response.data;
-};
+export const deleteNode = async (id) => (await api.delete(`/nodes/${id}`)).data;
 
-export const getNodeById = async (id) => {
-  const response = await api.get(`/nodes/${id}`);
-  return response.data;
-};
+export const restoreNode = async (id) => (await api.put(`/nodes/${id}/restore`)).data;
+
+function clean(params) {
+  return Object.fromEntries(
+    Object.entries(params ?? {}).filter(([, value]) => value !== "" && value !== null && value !== undefined)
+  );
+}
+
+export { clean };

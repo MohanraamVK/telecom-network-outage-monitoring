@@ -1,52 +1,27 @@
 import api from "./api";
+import { clean } from "./nodeService";
 
-export const getAllIncidents = async () => {
-  const response = await api.get("/incidents");
-  return response.data;
-};
+const unwrap = (response) => response.data?.data;
 
-export const getDeletedIncidents = async () => {
-  const response = await api.get("/incidents/deleted");
-  return response.data;
-};
+/** Server-side search: { q, status, severity, nodeId, deleted, page, size, sort } */
+export const searchIncidents = async (params) =>
+  unwrap(await api.get("/incidents/search", { params: clean(params) }));
 
-export const createIncident = async (incidentData) => {
-  const { nodeId, description, severity, status } = incidentData;
+export const getIncident = async (id) => unwrap(await api.get(`/incidents/${id}`));
 
-  const response = await api.post(`/incidents/node/${nodeId}`, {
-    description,
-    severity,
-    status,
-  });
+export const getTimeline = async (id) => unwrap(await api.get(`/incidents/${id}/timeline`)) ?? [];
 
-  return response.data;
-};
+export const getRecentActivity = async (limit = 12) =>
+  unwrap(await api.get("/incidents/activity", { params: { limit } })) ?? [];
 
-export const deleteIncident = async (id) => {
-  const response = await api.delete(`/incidents/${id}`);
-  return response.data;
-};
+export const createIncident = async ({ nodeId, description, severity, status }) =>
+  unwrap(await api.post(`/incidents/node/${nodeId}`, { description, severity, status }));
 
-export const restoreIncident = async (id) => {
-  const response = await api.put(`/incidents/${id}/restore`);
-  return response.data;
-};
+export const updateIncidentStatus = async (id, status) =>
+  unwrap(await api.put(`/incidents/${id}/status`, { status }));
 
-export const getIncidentById = async (id) => {
-  const response = await api.get(`/incidents/${id}`);
-  return response.data;
-};
+export const addNote = async (id, message) => unwrap(await api.post(`/incidents/${id}/notes`, { message }));
 
-export const filterIncidentsByStatus = async (status) => {
-  const response = await api.get("/incidents", {
-    params: { status },
-  });
-  return response.data;
-};
+export const deleteIncident = async (id) => (await api.delete(`/incidents/${id}`)).data;
 
-export const updateIncidentStatus = async (id, status) => {
-  const response = await api.put(`/incidents/${id}/status`, {
-    status,
-  });
-  return response.data;
-};
+export const restoreIncident = async (id) => (await api.put(`/incidents/${id}/restore`)).data;

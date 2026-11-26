@@ -1,384 +1,238 @@
-import { useEffect, useMemo, useState } from "react";
-import EmptyState from "../components/common/EmptyState";
-import PageControlsCard from "../components/common/PageControlsCard";
-import Pagination from "../components/common/Pagination";
-import SearchBar from "../components/common/SearchBar";
-import SortControls from "../components/common/SortControls";
-import TableSkeleton from "../components/common/TableSkeleton";
-import ViewToggle from "../components/common/ViewToggle";
-import NodeForm from "../components/node/NodeForm";
-import NodeTable from "../components/node/NodeTable";
+import { useCallback, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
+import NodeFormModal from "../components/node/NodeFormModal";
+import { NodeStatusBadge } from "../components/ui/Badge";
+import Button from "../components/ui/Button";
+import { EmptyState, ErrorBanner, Skeleton } from "../components/ui/Feedback";
+import { Pagination, SearchInput, Segmented, SortHeader } from "../components/ui/Toolbar";
 import { useConfirmation } from "../context/ConfirmationContext";
+import { useLive, useLiveRefresh } from "../context/LiveContext";
 import { useToast } from "../context/ToastContext";
 import { useAuth } from "../hooks/useAuth";
-import {
-  createNode,
-  deleteNode,
-  getAllNodes,
-  getDeletedNodes,
-  restoreNode,
-  updateNode,
-} from "../services/nodeService";
+import { useReload } from "../hooks/useReload";
+import { useNow } from "../hooks/useNow";
+import { errorMessage } from "../services/errors";
+import { createNode, deleteNode, restoreNode, searchNodes, updateNode } from "../services/nodeService";
+import { formatRelative } from "../utils/time";
+
+const STATUS_FILTERS = [
+  { value: "", label: "All" },
+  { value: "ACTIVE", label: "Up" },
+  { value: "DOWN", label: "Down" },
+  { value: "MAINTENANCE", label: "Maintenance" },
+];
 
 function NodesPage() {
-  const [nodes, setNodes] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [pageError, setPageError] = useState("");
-  const [editingNode, setEditingNode] = useState(null);
-  const [showDeleted, setShowDeleted] = useState(false);
-
-  const [searchTerm, setSearchTerm] = useState("");
-  const [sortBy, setSortBy] = useState("id");
-  const [sortOrder, setSortOrder] = useState("asc");
-
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(5);
-
-  const { showSuccess, showError, showInfo } = useToast();
-  const { confirm } = useConfirmation();
   const { canEdit } = useAuth();
+  const { health } = useLive();
+  const { showSuccess, showError } = useToast();
+  const { confirm } = useConfirmation();
+  const now = useNow(5000);
 
-  const sortOptions = [
-    { value: "id", label: "ID" },
-    { value: "name", label: "Name" },
-    { value: "location", label: "Location" },
-    { value: "status", label: "Status" },
-  ];
+  const [query, setQuery] = useState({ q: "", status: "", deleted: false, page: 0, size: 10, sort: "name,asc" });
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState("");
+  const [editor, setEditor] = useState({ open: false, node: null });
 
-  const extractNodeArray = (response) => {
-    if (Array.isArray(response?.data)) {
-      return response.data;
-    }
-    return [];
-  };
-
-  const fetchNodes = async (deletedMode = showDeleted) => {
+  const load = useCallback(async () => {
     try {
-      setLoading(true);
-      setPageError("");
-
-      const response = deletedMode ? await getDeletedNodes() : await getAllNodes();
-      const extractedNodes = extractNodeArray(response);
-
-      setNodes(extractedNodes);
-      setCurrentPage(1);
-    } catch (error) {
-      console.error("Fetch nodes error:", error);
-      setPageError("Failed to load nodes.");
-      showError("Failed to load nodes", "Please try again.");
-    } finally {
-      setLoading(false);
+      setResult(await searchNodes(query));
+      setError("");
+    } catch (err) {
+      setError(errorMessage(err, "Nodes could not be loaded."));
     }
+  }, [query]);
+
+  useReload(load);
+
+  useLiveRefresh(["node.changed", "incident.changed"], load);
+
+  const update = (patch) => setQuery((prev) => ({ ...prev, page: 0, ...patch }));
+  const onSearch = useCallback((q) => setQuery((prev) => ({ ...prev, q, page: 0 })), []);
+
+  // Overlay live status/latency from the monitoring stream onto the page of results
+  const liveById = useMemo(() => new Map((health ?? []).map((n) => [n.id, n])), [health]);
+  const rows = (result?.content ?? []).map((node) => {
+    const live = liveById.get(node.id);
+    return live && !node.deleted
+      ? { ...node, status: live.status, latencyMs: live.latencyMs, lastHeartbeatAt: live.lastHeartbeatAt ?? node.lastHeartbeatAt }
+      : node;
+  });
+
+  const save = async (values) => {
+    if (editor.node) {
+      await updateNode(editor.node.id, values);
+      showSuccess("Node updated", values.name);
+    } else {
+      await createNode(values);
+      showSuccess("Node added", values.name);
+    }
+    setEditor({ open: false, node: null });
+    load();
   };
 
-  useEffect(() => {
-    fetchNodes(showDeleted);
-  }, [showDeleted]);
-
-  const filteredNodes = useMemo(() => {
-    const normalizedSearch = searchTerm.trim().toLowerCase();
-
-    if (!normalizedSearch) {
-      return nodes;
-    }
-
-    return nodes.filter((node) => {
-      const searchableText = [node.id, node.name, node.location, node.status]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
-
-      return searchableText.includes(normalizedSearch);
+  const remove = async (node) => {
+    const ok = await confirm({
+      title: `Delete ${node.name}?`,
+      message: "The node and its incidents move to Deleted. You can restore them later.",
+      confirmText: "Delete node",
     });
-  }, [nodes, searchTerm]);
-
-  const sortedNodes = useMemo(() => {
-    const sorted = [...filteredNodes];
-
-    sorted.sort((a, b) => {
-      let aValue = a?.[sortBy];
-      let bValue = b?.[sortBy];
-
-      if (sortBy === "id") {
-        aValue = Number(aValue ?? 0);
-        bValue = Number(bValue ?? 0);
-      } else {
-        aValue = String(aValue ?? "").toLowerCase();
-        bValue = String(bValue ?? "").toLowerCase();
-      }
-
-      if (aValue < bValue) return sortOrder === "asc" ? -1 : 1;
-      if (aValue > bValue) return sortOrder === "asc" ? 1 : -1;
-      return 0;
-    });
-
-    return sorted;
-  }, [filteredNodes, sortBy, sortOrder]);
-
-  const totalPages = Math.max(1, Math.ceil(sortedNodes.length / itemsPerPage));
-
-  const paginatedNodes = useMemo(() => {
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    const endIndex = startIndex + itemsPerPage;
-    return sortedNodes.slice(startIndex, endIndex);
-  }, [sortedNodes, currentPage, itemsPerPage]);
-
-  const handleAddNode = async (nodeData) => {
+    if (!ok) return;
     try {
-      await createNode(nodeData);
-      await fetchNodes(false);
-      setSearchTerm("");
-      showSuccess("Node added", "The node was created successfully.");
-    } catch (error) {
-      console.error("Add node error:", error);
-      showError(
-        "Failed to add node",
-        error.response?.data?.message || "Please try again."
-      );
-      throw error;
+      await deleteNode(node.id);
+      showSuccess("Node deleted", node.name);
+      load();
+    } catch (err) {
+      showError("Node not deleted", errorMessage(err));
     }
   };
 
-  const handleEditNode = (node) => {
-    setEditingNode(node);
-    window.scrollTo({ top: 0, behavior: "smooth" });
-    showInfo("Edit mode enabled", `Editing node: ${node.name || "Unnamed node"}`);
-  };
-
-  const handleUpdateNode = async (id, nodeData) => {
+  const restore = async (node) => {
     try {
-      await updateNode(id, nodeData);
-      setEditingNode(null);
-      await fetchNodes(false);
-      showSuccess("Node updated", "The node was updated successfully.");
-    } catch (error) {
-      console.error("Update node error:", error);
-      showError(
-        "Failed to update node",
-        error.response?.data?.message || "Please try again."
-      );
-      throw error;
+      await restoreNode(node.id);
+      showSuccess("Node restored", node.name);
+      load();
+    } catch (err) {
+      showError("Node not restored", errorMessage(err));
     }
-  };
-
-  const handleCancelEdit = () => {
-    setEditingNode(null);
-    showInfo("Edit cancelled", "Returned to add node mode.");
-  };
-
-  const handleDeleteNode = async (id) => {
-    const confirmed = await confirm({
-      title: "Delete Node",
-      message: "Are you sure you want to delete this node? It will be moved to deleted records.",
-      confirmText: "Delete",
-      cancelText: "Cancel",
-      confirmVariant: "danger",
-    });
-
-    if (!confirmed) return;
-
-    try {
-      await deleteNode(id);
-
-      if (editingNode && editingNode.id === id) {
-        setEditingNode(null);
-      }
-
-      await fetchNodes(false);
-      showSuccess("Node deleted", "The node was moved to deleted records.");
-    } catch (error) {
-      console.error("Delete node error:", error);
-      showError(
-        "Failed to delete node",
-        error.response?.data?.message || "Please try again."
-      );
-    }
-  };
-
-  const handleRestoreNode = async (id) => {
-    const confirmed = await confirm({
-      title: "Restore Node",
-      message: "Do you want to restore this node?",
-      confirmText: "Restore",
-      cancelText: "Cancel",
-      confirmVariant: "success",
-    });
-
-    if (!confirmed) return;
-
-    try {
-      await restoreNode(id);
-      await fetchNodes(true);
-      showSuccess("Node restored", "The node was restored successfully.");
-    } catch (error) {
-      console.error("Restore node error:", error);
-      showError(
-        "Failed to restore node",
-        error.response?.data?.message || "Please try again."
-      );
-    }
-  };
-
-  const handleShowActive = () => {
-    setEditingNode(null);
-    setShowDeleted(false);
-    setSearchTerm("");
-    setCurrentPage(1);
-  };
-
-  const handleShowDeleted = () => {
-    setEditingNode(null);
-    setShowDeleted(true);
-    setSearchTerm("");
-    setCurrentPage(1);
-  };
-
-  const handleSearchChange = (value) => {
-    setSearchTerm(value);
-    setCurrentPage(1);
-  };
-
-  const handleSortByChange = (value) => {
-    setSortBy(value);
-    setCurrentPage(1);
-  };
-
-  const handleSortOrderChange = (value) => {
-    setSortOrder(value);
-    setCurrentPage(1);
-  };
-
-  const handlePageChange = (page) => {
-    if (page < 1 || page > totalPages) return;
-    setCurrentPage(page);
-  };
-
-  const handleItemsPerPageChange = (value) => {
-    setItemsPerPage(value);
-    setCurrentPage(1);
-  };
-
-  const handleClearSearch = () => {
-    setSearchTerm("");
-    setCurrentPage(1);
   };
 
   return (
-    <div style={styles.page}>
-      <h2>Nodes Management</h2>
+    <div className="space-y-6">
+      <header className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h1 className="font-display text-3xl font-semibold tracking-tight">Nodes</h1>
+          <p className="mt-1 text-fjord-400">Towers, routers and edge sites in the network.</p>
+        </div>
+        {canEdit && !query.deleted ? (
+          <Button variant="primary" onClick={() => setEditor({ open: true, node: null })}>
+            Add node
+          </Button>
+        ) : null}
+      </header>
 
-      {!showDeleted && canEdit && (
-        <NodeForm
-          key={editingNode ? editingNode.id : "new"}
-          onAddNode={handleAddNode}
-          onUpdateNode={handleUpdateNode}
-          editingNode={editingNode}
-          onCancelEdit={handleCancelEdit}
+      <div className="flex flex-wrap items-center gap-3">
+        <SearchInput value={query.q} onChange={onSearch} placeholder="Search name, location or #id" />
+        <Segmented label="Status" value={query.status} onChange={(status) => update({ status })} options={STATUS_FILTERS} />
+        <Segmented
+          label="Show"
+          value={query.deleted ? "deleted" : "active"}
+          onChange={(v) => update({ deleted: v === "deleted", status: "" })}
+          options={[
+            { value: "active", label: "Active" },
+            { value: "deleted", label: "Deleted" },
+          ]}
         />
-      )}
+      </div>
 
-      <PageControlsCard
-        title="Node Controls"
-        subtitle="Search, sort, and switch between active and deleted nodes."
-      >
-        <div style={styles.topRow}>
-          <ViewToggle
-            activeLabel="Show Active Nodes"
-            deletedLabel="Show Deleted Nodes"
-            showDeleted={showDeleted}
-            onShowActive={handleShowActive}
-            onShowDeleted={handleShowDeleted}
-          />
+      {error ? <ErrorBanner onRetry={load}>{error}</ErrorBanner> : null}
+
+      <div className="overflow-hidden rounded-lg border border-fjord-800 bg-fjord-900">
+        <div className="relative overflow-x-auto">
+          <table className="w-full min-w-[760px] text-left text-sm">
+            <thead className="border-b border-fjord-800 text-fjord-400">
+              <tr>
+                <SortHeader field="name" sort={query.sort} onSort={(sort) => update({ sort })}>Node</SortHeader>
+                <SortHeader field="status" sort={query.sort} onSort={(sort) => update({ sort })}>Status</SortHeader>
+                <th scope="col" className="px-4 py-3 font-medium">Latency</th>
+                <SortHeader field="lastHeartbeatAt" sort={query.sort} onSort={(sort) => update({ sort })}>Last heartbeat</SortHeader>
+                <th scope="col" className="px-4 py-3 font-medium">Open incidents</th>
+                <th scope="col" className="px-4 py-3 text-right font-medium">
+                  <span className="sr-only">Actions</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-fjord-800">
+              {!result
+                ? Array.from({ length: 5 }).map((_, i) => (
+                    <tr key={i}>
+                      <td colSpan={6} className="px-4 py-3">
+                        <Skeleton className="h-8" />
+                      </td>
+                    </tr>
+                  ))
+                : rows.map((node) => (
+                    <tr key={node.id} className="hover:bg-fjord-850/60">
+                      <td className="px-4 py-3">
+                        <p className="font-semibold text-fjord-100">{node.name}</p>
+                        <p className="text-fjord-400">{node.location}</p>
+                      </td>
+                      <td className="px-4 py-3">
+                        <NodeStatusBadge status={node.status} />
+                      </td>
+                      <td className="px-4 py-3 text-fjord-100">
+                        {node.status === "DOWN" || node.latencyMs == null ? <span className="text-fjord-400">—</span> : `${node.latencyMs} ms`}
+                      </td>
+                      <td className="px-4 py-3 text-fjord-300">
+                        {node.lastHeartbeatAt ? formatRelative(node.lastHeartbeatAt, now) : <span className="text-fjord-400">Never</span>}
+                      </td>
+                      <td className="px-4 py-3">
+                        {node.openIncidentCount > 0 ? (
+                          <Link to={`/incidents?nodeId=${node.id}`} className="font-semibold text-notice hover:underline">
+                            {node.openIncidentCount} open
+                          </Link>
+                        ) : (
+                          <span className="text-fjord-400">None</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        {canEdit ? (
+                          <div className="flex justify-end gap-1">
+                            {node.deleted ? (
+                              <Button size="sm" onClick={() => restore(node)}>Restore</Button>
+                            ) : (
+                              <>
+                                <Button size="sm" variant="ghost" onClick={() => setEditor({ open: true, node })}>Edit</Button>
+                                <Button size="sm" variant="ghost" className="hover:text-outage" onClick={() => remove(node)}>Delete</Button>
+                              </>
+                            )}
+                          </div>
+                        ) : null}
+                      </td>
+                    </tr>
+                  ))}
+            </tbody>
+          </table>
         </div>
 
-        <div style={styles.searchRow}>
-          <SearchBar
-            value={searchTerm}
-            onChange={handleSearchChange}
-            placeholder={
-              showDeleted
-                ? "Search deleted nodes by id, name, location, or status"
-                : "Search active nodes by id, name, location, or status"
+        {result && result.totalElements === 0 ? (
+          <EmptyState
+            title={query.q || query.status ? "No nodes match these filters" : query.deleted ? "No deleted nodes" : "No nodes yet"}
+            action={
+              query.q || query.status ? (
+                <Button onClick={() => update({ q: "", status: "" })}>Clear filters</Button>
+              ) : canEdit && !query.deleted ? (
+                <Button variant="primary" onClick={() => setEditor({ open: true, node: null })}>Add node</Button>
+              ) : null
             }
-          />
-        </div>
+          >
+            {query.q || query.status ? "Try a different search or status." : query.deleted ? "Deleted nodes appear here and can be restored." : "Add the first tower or router to start monitoring."}
+          </EmptyState>
+        ) : null}
 
-        <div style={styles.sortRow}>
-          <SortControls
-            sortBy={sortBy}
-            sortOrder={sortOrder}
-            onSortByChange={handleSortByChange}
-            onSortOrderChange={handleSortOrderChange}
-            options={sortOptions}
-            label="Sort nodes by"
-          />
-        </div>
-      </PageControlsCard>
-
-      {loading ? (
-        <TableSkeleton
-          rows={5}
-          columns={5}
-          title={showDeleted ? "Loading deleted nodes..." : "Loading active nodes..."}
-        />
-      ) : pageError ? (
-        <p style={styles.error}>{pageError}</p>
-      ) : sortedNodes.length === 0 ? (
-        <EmptyState
-          title={showDeleted ? "No deleted nodes found" : "No active nodes found"}
-          description={
-            searchTerm
-              ? "Try adjusting your search or clear the search term."
-              : showDeleted
-              ? "Deleted nodes will appear here."
-              : "Start by adding a new node."
-          }
-          actionLabel={searchTerm ? "Clear Search" : undefined}
-          onAction={searchTerm ? handleClearSearch : undefined}
-        />
-      ) : (
-        <>
-          <NodeTable
-            nodes={paginatedNodes}
-            onEditNode={handleEditNode}
-            onDeleteNode={handleDeleteNode}
-            onRestoreNode={handleRestoreNode}
-            readOnly={!canEdit}
-            showDeleted={showDeleted}
-          />
-
+        {result ? (
           <Pagination
-            currentPage={currentPage}
-            totalPages={totalPages}
-            totalItems={sortedNodes.length}
-            itemsPerPage={itemsPerPage}
-            onPageChange={handlePageChange}
-            onItemsPerPageChange={handleItemsPerPageChange}
+            page={result.page}
+            totalPages={result.totalPages}
+            totalElements={result.totalElements}
+            size={query.size}
+            onPageChange={(page) => setQuery((prev) => ({ ...prev, page }))}
+            onSizeChange={(size) => update({ size })}
           />
-        </>
-      )}
+        ) : null}
+      </div>
+
+      {editor.open ? (
+        <NodeFormModal
+          key={editor.node?.id ?? "new"}
+          open
+          node={editor.node}
+          onClose={() => setEditor({ open: false, node: null })}
+          onSave={save}
+        />
+      ) : null}
     </div>
   );
 }
-
-const styles = {
-  page: {
-    maxWidth: "1000px",
-    margin: "30px auto",
-    padding: "20px",
-  },
-  topRow: {
-    width: "100%",
-  },
-  searchRow: {
-    width: "100%",
-  },
-  sortRow: {
-    width: "100%",
-  },
-  error: {
-    color: "red",
-  },
-};
 
 export default NodesPage;

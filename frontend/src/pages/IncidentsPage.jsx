@@ -1,467 +1,273 @@
-import { useEffect, useMemo, useState } from "react";
-import EmptyState from "../components/common/EmptyState";
-import PageControlsCard from "../components/common/PageControlsCard";
-import Pagination from "../components/common/Pagination";
-import TableSkeleton from "../components/common/TableSkeleton";
-import ViewToggle from "../components/common/ViewToggle";
-import IncidentForm from "../components/incident/IncidentForm";
-import IncidentTable from "../components/incident/IncidentTable";
+import { useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
+import IncidentDrawer from "../components/incident/IncidentDrawer";
+import IncidentFormModal from "../components/incident/IncidentFormModal";
+import { IncidentStatusBadge, SeverityBadge } from "../components/ui/Badge";
+import Button from "../components/ui/Button";
+import { EmptyState, ErrorBanner, Skeleton } from "../components/ui/Feedback";
+import { Pagination, SearchInput, Segmented, SortHeader } from "../components/ui/Toolbar";
 import { useConfirmation } from "../context/ConfirmationContext";
+import { useLiveRefresh } from "../context/LiveContext";
 import { useToast } from "../context/ToastContext";
 import { useAuth } from "../hooks/useAuth";
-import {
-  createIncident,
-  deleteIncident,
-  getAllIncidents,
-  getDeletedIncidents,
-  restoreIncident,
-  updateIncidentStatus,
-} from "../services/incidentService";
-import { getDeletedNodes } from "../services/nodeService";
+import { useReload } from "../hooks/useReload";
+import { useNow } from "../hooks/useNow";
+import { errorMessage } from "../services/errors";
+import { createIncident, deleteIncident, restoreIncident, searchIncidents } from "../services/incidentService";
+import { getNodeOptions } from "../services/nodeService";
+import { formatDuration, formatRelative, minutesBetween } from "../utils/time";
+
+const STATUS_FILTERS = [
+  { value: "", label: "All" },
+  { value: "OPEN", label: "Open" },
+  { value: "IN_PROGRESS", label: "In progress" },
+  { value: "RESOLVED", label: "Resolved" },
+  { value: "CLOSED", label: "Closed" },
+];
 
 function IncidentsPage() {
-  const [incidents, setIncidents] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [pageError, setPageError] = useState("");
-  const [showDeleted, setShowDeleted] = useState(false);
-  const [deletedNodeIds, setDeletedNodeIds] = useState([]);
-
-  const [searchTerm, setSearchTerm] = useState("");
-  const [sortBy, setSortBy] = useState("id");
-  const [sortOrder, setSortOrder] = useState("asc");
-
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(5);
-
-  const { showSuccess, showError, showWarning } = useToast();
-  const { confirm } = useConfirmation();
   const { canEdit } = useAuth();
+  const { showSuccess, showError } = useToast();
+  const { confirm } = useConfirmation();
+  const now = useNow(15000);
+  const [params, setParams] = useSearchParams();
 
-  const extractIncidentArray = (response) => {
-    if (Array.isArray(response?.data)) {
-      return response.data;
-    }
-    return [];
-  };
+  const nodeId = params.get("nodeId") ? Number(params.get("nodeId")) : null;
+  const openId = params.get("open") ? Number(params.get("open")) : null;
 
-  const extractNodeArray = (response) => {
-    if (Array.isArray(response?.data)) {
-      return response.data;
-    }
-    return [];
-  };
+  const [query, setQuery] = useState({ q: "", status: "", severity: "", deleted: false, page: 0, size: 10, sort: "createdAt,desc" });
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState("");
+  const [creating, setCreating] = useState(false);
+  const [nodeName, setNodeName] = useState("");
 
-  const fetchDeletedNodeIds = async () => {
+  const load = useCallback(async () => {
     try {
-      const response = await getDeletedNodes();
-      const deletedNodes = extractNodeArray(response);
-      setDeletedNodeIds(deletedNodes.map((node) => node.id));
-    } catch (error) {
-      console.error("Fetch deleted nodes error:", error);
-      setDeletedNodeIds([]);
+      setResult(await searchIncidents({ ...query, nodeId }));
+      setError("");
+    } catch (err) {
+      setError(errorMessage(err, "Incidents could not be loaded."));
     }
-  };
+  }, [query, nodeId]);
 
-  const fetchActiveIncidents = async () => {
-    const response = await getAllIncidents();
-    setIncidents(extractIncidentArray(response));
-    setCurrentPage(1);
-  };
+  useReload(load);
 
-  const fetchDeletedIncidents = async () => {
-    const response = await getDeletedIncidents();
-    setIncidents(extractIncidentArray(response));
-    setCurrentPage(1);
-  };
-
-  const fetchIncidents = async () => {
-    try {
-      setLoading(true);
-      setPageError("");
-
-      if (showDeleted) {
-        await Promise.all([fetchDeletedIncidents(), fetchDeletedNodeIds()]);
-      } else {
-        await fetchActiveIncidents();
-      }
-    } catch (error) {
-      console.error("Fetch incidents error:", error);
-
-      if (error.response?.data?.message) {
-        setPageError(error.response.data.message);
-        showError("Failed to load incidents", error.response.data.message);
-      } else {
-        setPageError("Failed to load incidents.");
-        showError("Failed to load incidents", "Please try again.");
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
+  useLiveRefresh(["incident.changed", "node.changed"], load);
 
   useEffect(() => {
-    fetchIncidents();
-  }, [showDeleted]);
+    if (!nodeId) return;
+    getNodeOptions()
+      .then((nodes) => setNodeName(nodes.find((n) => n.id === nodeId)?.name ?? `Node #${nodeId}`))
+      .catch(() => setNodeName(`Node #${nodeId}`));
+  }, [nodeId]);
 
-  const filteredIncidents = useMemo(() => {
-    const normalizedSearch = searchTerm.trim().toLowerCase();
+  const update = (patch) => setQuery((prev) => ({ ...prev, page: 0, ...patch }));
+  const onSearch = useCallback((q) => setQuery((prev) => ({ ...prev, q, page: 0 })), []);
 
-    if (!normalizedSearch) {
-      return incidents;
-    }
+  const setParam = (key, value) => {
+    const next = new URLSearchParams(params);
+    if (value == null) next.delete(key);
+    else next.set(key, String(value));
+    setParams(next, { replace: key === "open" });
+  };
 
-    return incidents.filter((incident) => {
-      const searchableText = [
-        incident.id,
-        incident.description,
-        incident.severity,
-        incident.status,
-        incident.nodeId,
-        incident.nodeName,
-      ]
-        .filter((value) => value !== null && value !== undefined)
-        .join(" ")
-        .toLowerCase();
+  const save = async (values) => {
+    const created = await createIncident(values);
+    setCreating(false);
+    showSuccess("Incident raised", `#${created.id} on ${created.nodeName}`);
+    load();
+  };
 
-      return searchableText.includes(normalizedSearch);
+  const remove = async (incident) => {
+    const ok = await confirm({
+      title: `Delete incident #${incident.id}?`,
+      message: "It moves to Deleted and stops counting towards the dashboard. You can restore it later.",
+      confirmText: "Delete incident",
     });
-  }, [incidents, searchTerm]);
-
-  const sortedIncidents = useMemo(() => {
-    const sorted = [...filteredIncidents];
-
-    sorted.sort((a, b) => {
-      let aValue = a?.[sortBy];
-      let bValue = b?.[sortBy];
-
-      if (sortBy === "id" || sortBy === "nodeId") {
-        aValue = Number(aValue ?? 0);
-        bValue = Number(bValue ?? 0);
-      } else {
-        aValue = String(aValue ?? "").toLowerCase();
-        bValue = String(bValue ?? "").toLowerCase();
-      }
-
-      if (aValue < bValue) return sortOrder === "asc" ? -1 : 1;
-      if (aValue > bValue) return sortOrder === "asc" ? 1 : -1;
-      return 0;
-    });
-
-    return sorted;
-  }, [filteredIncidents, sortBy, sortOrder]);
-
-  const totalPages = Math.max(1, Math.ceil(sortedIncidents.length / itemsPerPage));
-
-  const paginatedIncidents = useMemo(() => {
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    const endIndex = startIndex + itemsPerPage;
-    return sortedIncidents.slice(startIndex, endIndex);
-  }, [sortedIncidents, currentPage, itemsPerPage]);
-
-  const handleAddIncident = async (incidentData) => {
+    if (!ok) return;
     try {
-      await createIncident(incidentData);
-      setShowDeleted(false);
-      setSearchTerm("");
-      await fetchActiveIncidents();
-      showSuccess("Incident added", "The incident was created successfully.");
-    } catch (error) {
-      console.error("Add incident error:", error);
-      showError(
-        "Failed to add incident",
-        error.response?.data?.message || "Please try again."
-      );
-      throw error;
+      await deleteIncident(incident.id);
+      showSuccess("Incident deleted", `#${incident.id}`);
+      setParam("open", null);
+      load();
+    } catch (err) {
+      showError("Incident not deleted", errorMessage(err));
     }
   };
 
-  const handleStatusUpdate = async (id, status) => {
-    try {
-      await updateIncidentStatus(id, status);
-      await fetchActiveIncidents();
-      showSuccess("Status updated", `Incident status changed to ${status}.`);
-    } catch (error) {
-      console.error("Update incident status error:", error);
-      showError(
-        "Failed to update status",
-        error.response?.data?.message || "Please try again."
-      );
-    }
-  };
-
-  const handleDeleteIncident = async (id) => {
-    const confirmed = await confirm({
-      title: "Delete Incident",
-      message:
-        "Are you sure you want to delete this incident? It will be moved to deleted records.",
-      confirmText: "Delete",
-      cancelText: "Cancel",
-      confirmVariant: "danger",
-    });
-
-    if (!confirmed) return;
-
-    try {
-      await deleteIncident(id);
-      await fetchActiveIncidents();
-      showSuccess("Incident deleted", "The incident was moved to deleted records.");
-    } catch (error) {
-      console.error("Delete incident error:", error);
-      showError(
-        "Failed to delete incident",
-        error.response?.data?.message || "Please try again."
-      );
-    }
-  };
-
-  const handleRestoreIncident = async (incident) => {
-    const isParentNodeDeleted = deletedNodeIds.includes(incident.nodeId);
-
-    if (isParentNodeDeleted) {
-      showWarning(
-        "Restore not allowed",
-        "Cannot restore this incident because its node is deleted. Restore the node first."
-      );
-      return;
-    }
-
-    const confirmed = await confirm({
-      title: "Restore Incident",
-      message: "Do you want to restore this incident?",
-      confirmText: "Restore",
-      cancelText: "Cancel",
-      confirmVariant: "success",
-    });
-
-    if (!confirmed) return;
-
+  const restore = async (incident) => {
     try {
       await restoreIncident(incident.id);
-      await Promise.all([fetchDeletedIncidents(), fetchDeletedNodeIds()]);
-      showSuccess("Incident restored", "The incident was restored successfully.");
-    } catch (error) {
-      console.error("Restore incident error:", error);
-      showError(
-        "Failed to restore incident",
-        error.response?.data?.message || "Please try again."
-      );
+      showSuccess("Incident restored", `#${incident.id}`);
+      load();
+    } catch (err) {
+      showError("Incident not restored", errorMessage(err));
     }
   };
 
-  const handleShowActive = async () => {
-    setShowDeleted(false);
-    setSearchTerm("");
-    setCurrentPage(1);
-    await fetchActiveIncidents();
-  };
-
-  const handleShowDeleted = async () => {
-    setSearchTerm("");
-    setShowDeleted(true);
-    setCurrentPage(1);
-    await Promise.all([fetchDeletedIncidents(), fetchDeletedNodeIds()]);
-  };
-
-  const handleSearchChange = (event) => {
-    setSearchTerm(event.target.value);
-    setCurrentPage(1);
-  };
-
-  const handleSortByChange = (event) => {
-    setSortBy(event.target.value);
-    setCurrentPage(1);
-  };
-
-  const handleSortOrderChange = (event) => {
-    setSortOrder(event.target.value);
-    setCurrentPage(1);
-  };
-
-  const handlePageChange = (page) => {
-    if (page < 1 || page > totalPages) return;
-    setCurrentPage(page);
-  };
-
-  const handleItemsPerPageChange = (value) => {
-    setItemsPerPage(value);
-    setCurrentPage(1);
-  };
-
-  const handleClearSearch = () => {
-    setSearchTerm("");
-    setCurrentPage(1);
-  };
+  const filtered = query.q || query.status || query.severity || nodeId;
 
   return (
-    <div style={styles.page}>
-      <h2>Incidents Management</h2>
+    <div className="space-y-6">
+      <header className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h1 className="font-display text-3xl font-semibold tracking-tight">Incidents</h1>
+          <p className="mt-1 text-fjord-400">Outages and faults, from detection to resolution.</p>
+        </div>
+        {canEdit && !query.deleted ? (
+          <Button variant="primary" onClick={() => setCreating(true)}>
+            Raise incident
+          </Button>
+        ) : null}
+      </header>
 
-      {!showDeleted && canEdit && <IncidentForm onAddIncident={handleAddIncident} />}
+      <div className="flex flex-wrap items-center gap-3">
+        <SearchInput value={query.q} onChange={onSearch} placeholder="Search description, node or #id" />
+        <Segmented label="Status" value={query.status} onChange={(status) => update({ status })} options={STATUS_FILTERS} />
+        <select
+          value={query.severity}
+          onChange={(event) => update({ severity: event.target.value })}
+          aria-label="Severity"
+          className="h-10 rounded-md bg-fjord-900 px-3 text-sm text-fjord-100 ring-1 ring-fjord-700 ring-inset"
+        >
+          <option value="">Any severity</option>
+          <option value="CRITICAL">Critical</option>
+          <option value="HIGH">High</option>
+          <option value="MEDIUM">Medium</option>
+          <option value="LOW">Low</option>
+        </select>
+        <Segmented
+          label="Show"
+          value={query.deleted ? "deleted" : "active"}
+          onChange={(v) => update({ deleted: v === "deleted" })}
+          options={[
+            { value: "active", label: "Active" },
+            { value: "deleted", label: "Deleted" },
+          ]}
+        />
+        {nodeId ? (
+          <button
+            type="button"
+            onClick={() => setParam("nodeId", null)}
+            className="inline-flex h-8 items-center gap-2 rounded-full bg-notice/15 pr-2 pl-3 text-sm font-medium text-notice hover:bg-notice/25"
+          >
+            {nodeName || "Node"}
+            <svg viewBox="0 0 20 20" className="size-3.5" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true">
+              <path d="M5 5l10 10M15 5L5 15" strokeLinecap="round" />
+            </svg>
+            <span className="sr-only">Remove node filter</span>
+          </button>
+        ) : null}
+      </div>
 
-      <PageControlsCard
-        title="Incident Controls"
-        subtitle="Search, sort, and switch between active and deleted incidents."
-      >
-        <div style={styles.toggleRow}>
-          <ViewToggle
-            activeLabel="Active"
-            deletedLabel="Deleted"
-            showDeleted={showDeleted}
-            onShowActive={handleShowActive}
-            onShowDeleted={handleShowDeleted}
-          />
+      {error ? <ErrorBanner onRetry={load}>{error}</ErrorBanner> : null}
+
+      <div className="overflow-hidden rounded-lg border border-fjord-800 bg-fjord-900">
+        <div className="relative overflow-x-auto">
+          <table className="w-full min-w-[860px] text-left text-sm">
+            <thead className="border-b border-fjord-800 text-fjord-400">
+              <tr>
+                <SortHeader field="id" sort={query.sort} onSort={(sort) => update({ sort })} className="w-20">#</SortHeader>
+                <SortHeader field="description" sort={query.sort} onSort={(sort) => update({ sort })}>Incident</SortHeader>
+                <SortHeader field="severity" sort={query.sort} onSort={(sort) => update({ sort })}>Severity</SortHeader>
+                <SortHeader field="status" sort={query.sort} onSort={(sort) => update({ sort })}>Status</SortHeader>
+                <SortHeader field="createdAt" sort={query.sort} onSort={(sort) => update({ sort })}>Opened</SortHeader>
+                <SortHeader field="resolvedAt" sort={query.sort} onSort={(sort) => update({ sort })}>Time to resolve</SortHeader>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-fjord-800">
+              {!result
+                ? Array.from({ length: 6 }).map((_, i) => (
+                    <tr key={i}>
+                      <td colSpan={6} className="px-4 py-3">
+                        <Skeleton className="h-8" />
+                      </td>
+                    </tr>
+                  ))
+                : result.content.map((incident) => {
+                    const resolvedIn = incident.resolvedAt ? minutesBetween(incident.createdAt, incident.resolvedAt) : null;
+                    return (
+                      <tr
+                        key={incident.id}
+                        onClick={() => setParam("open", incident.id)}
+                        className={`cursor-pointer hover:bg-fjord-850/60 ${openId === incident.id ? "bg-fjord-850" : ""}`}
+                      >
+                        <td className="px-4 py-3 text-fjord-400">{incident.id}</td>
+                        <td className="max-w-md px-4 py-3">
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setParam("open", incident.id);
+                            }}
+                            className="block max-w-full truncate text-left font-semibold text-fjord-100 hover:underline"
+                          >
+                            {incident.description}
+                          </button>
+                          <span className="text-fjord-400">
+                            {incident.nodeName}
+                            {incident.autoGenerated ? <span className="ml-2 text-xs text-fjord-300">detected automatically</span> : null}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3"><SeverityBadge severity={incident.severity} /></td>
+                        <td className="px-4 py-3"><IncidentStatusBadge status={incident.status} /></td>
+                        <td className="px-4 py-3 text-fjord-300">{formatRelative(incident.createdAt, now)}</td>
+                        <td className="px-4 py-3 text-fjord-300">
+                          {resolvedIn != null ? formatDuration(resolvedIn) : <span className="text-fjord-400">Ongoing</span>}
+                        </td>
+                      </tr>
+                    );
+                  })}
+            </tbody>
+          </table>
         </div>
 
-        <div style={styles.controlsGrid}>
-          <div style={styles.controlField}>
-            <label style={styles.label}>Search</label>
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={handleSearchChange}
-              placeholder={
-                showDeleted
-                  ? "Search deleted incidents by description, severity, status, node id, or node name"
-                  : "Search incidents by description, severity, status, node id, or node name"
-              }
-              style={styles.input}
-            />
-          </div>
+        {result && result.totalElements === 0 ? (
+          <EmptyState
+            title={filtered ? "No incidents match these filters" : query.deleted ? "No deleted incidents" : "No incidents"}
+            action={
+              filtered ? (
+                <Button
+                  onClick={() => {
+                    update({ q: "", status: "", severity: "" });
+                    setParam("nodeId", null);
+                  }}
+                >
+                  Clear filters
+                </Button>
+              ) : null
+            }
+          >
+            {filtered ? "Try a different search or filter." : query.deleted ? "Deleted incidents appear here and can be restored." : "Incidents appear here when the detector spots an outage or someone raises one."}
+          </EmptyState>
+        ) : null}
 
-          <div style={styles.controlField}>
-            <label style={styles.label}>Sort by</label>
-            <select
-              value={sortBy}
-              onChange={handleSortByChange}
-              style={styles.select}
-            >
-              <option value="id">ID</option>
-              <option value="description">Description</option>
-              <option value="severity">Severity</option>
-              <option value="status">Status</option>
-              <option value="nodeId">Node ID</option>
-              <option value="nodeName">Node Name</option>
-            </select>
-          </div>
-
-          <div style={styles.controlField}>
-            <label style={styles.label}>Sort order</label>
-            <select
-              value={sortOrder}
-              onChange={handleSortOrderChange}
-              style={styles.select}
-            >
-              <option value="asc">Ascending</option>
-              <option value="desc">Descending</option>
-            </select>
-          </div>
-        </div>
-      </PageControlsCard>
-
-      {showDeleted && (
-        <p style={styles.infoText}>
-          Deleted incidents can be restored only if their parent node is active.
-        </p>
-      )}
-
-      {loading ? (
-        <TableSkeleton
-          rows={5}
-          columns={7}
-          title={showDeleted ? "Loading deleted incidents..." : "Loading active incidents..."}
-        />
-      ) : pageError ? (
-        <p style={styles.error}>{pageError}</p>
-      ) : sortedIncidents.length === 0 ? (
-        <EmptyState
-          icon={showDeleted ? "🗑️" : "🚨"}
-          title={showDeleted ? "No deleted incidents found" : "No incidents found"}
-          description={
-            searchTerm
-              ? "Try adjusting your search or clear the search term."
-              : showDeleted
-              ? "Deleted incidents will appear here."
-              : "Start by creating a new incident."
-          }
-          actionLabel={searchTerm ? "Clear Search" : undefined}
-          onAction={searchTerm ? handleClearSearch : undefined}
-        />
-      ) : (
-        <>
-          <IncidentTable
-            incidents={paginatedIncidents}
-            onStatusUpdate={handleStatusUpdate}
-            onDeleteIncident={handleDeleteIncident}
-            onRestoreIncident={handleRestoreIncident}
-            readOnly={!canEdit}
-            showDeleted={showDeleted}
-            deletedNodeIds={deletedNodeIds}
-          />
-
+        {result ? (
           <Pagination
-            currentPage={currentPage}
-            totalPages={totalPages}
-            totalItems={sortedIncidents.length}
-            itemsPerPage={itemsPerPage}
-            onPageChange={handlePageChange}
-            onItemsPerPageChange={handleItemsPerPageChange}
+            page={result.page}
+            totalPages={result.totalPages}
+            totalElements={result.totalElements}
+            size={query.size}
+            onPageChange={(page) => setQuery((prev) => ({ ...prev, page }))}
+            onSizeChange={(size) => update({ size })}
           />
-        </>
-      )}
+        ) : null}
+      </div>
+
+      {creating ? <IncidentFormModal open defaultNodeId={nodeId ?? ""} onClose={() => setCreating(false)} onSave={save} /> : null}
+
+      {openId ? (
+        <IncidentDrawer
+          key={openId}
+          incidentId={openId}
+          onClose={() => setParam("open", null)}
+          onChanged={load}
+          onDelete={remove}
+          onRestore={restore}
+        />
+      ) : null}
     </div>
   );
 }
-
-const styles = {
-  page: {
-    maxWidth: "1200px",
-    margin: "30px auto",
-    padding: "20px",
-  },
-  toggleRow: {
-    width: "100%",
-  },
-  controlsGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-    gap: "16px",
-    alignItems: "end",
-  },
-  controlField: {
-    display: "flex",
-    flexDirection: "column",
-    gap: "6px",
-    minWidth: 0,
-  },
-  label: {
-    fontSize: "13px",
-    fontWeight: "600",
-    color: "#374151",
-  },
-  input: {
-    width: "100%",
-    padding: "10px 12px",
-    borderRadius: "8px",
-    border: "1px solid #d1d5db",
-    fontSize: "14px",
-    backgroundColor: "#fff",
-    outline: "none",
-  },
-  select: {
-    width: "100%",
-    padding: "10px 12px",
-    borderRadius: "8px",
-    border: "1px solid #d1d5db",
-    fontSize: "14px",
-    backgroundColor: "#fff",
-  },
-  infoText: {
-    marginBottom: "15px",
-    color: "#555",
-  },
-  error: {
-    color: "red",
-  },
-};
 
 export default IncidentsPage;

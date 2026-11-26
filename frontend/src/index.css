@@ -1,44 +1,60 @@
-* {
-  box-sizing: border-box;
-}
+@import "tailwindcss";
 
-body {
-  margin: 0;
-  font-family: Arial, sans-serif;
-  background-color: #f3f4f6;
-  color: #111827;
-}
+/*
+ * Design tokens: a NOC wall screen for a Swedish telecom network.
+ * Deep fjord-blue slate surfaces; colour is reserved for network state.
+ */
+@theme {
+  --font-sans: "Barlow", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Barlow Semi Condensed", "Barlow", ui-sans-serif, sans-serif;
 
-button,
-input,
-select {
-  font: inherit;
-}
+  --color-fjord-950: #0b131d;
+  --color-fjord-900: #0f1a27;
+  --color-fjord-850: #132131;
+  --color-fjord-800: #18293c;
+  --color-fjord-700: #22374f;
+  --color-fjord-600: #2f4865;
+  --color-fjord-400: #6f88a6;
+  --color-fjord-300: #93a8c1;
+  --color-fjord-100: #dbe5f0;
 
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
+  --color-signal: #2fd3a8;   /* up / healthy */
+  --color-outage: #f25f5c;   /* down / critical */
+  --color-caution: #f2b440;  /* maintenance / high */
+  --color-notice: #6cb4ff;   /* in progress / info */
+  --color-calm: #a58cf2;     /* medium */
+
+  --animate-pulse-ring: pulse-ring 2s ease-out infinite;
+
+  @keyframes pulse-ring {
+    0% { box-shadow: 0 0 0 0 color-mix(in oklab, currentColor 55%, transparent); }
+    80%, 100% { box-shadow: 0 0 0 8px transparent; }
   }
 }
 
-@keyframes shimmer {
-  0% {
-    background-position: 200% 0;
+@layer base {
+  html {
+    color-scheme: dark;
   }
 
-  100% {
-    background-position: -200% 0;
+  body {
+    @apply bg-fjord-950 text-fjord-100 font-sans antialiased;
+    font-feature-settings: "tnum" 1;
+  }
+
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-notice;
+  }
+
+  ::selection {
+    @apply bg-notice/30;
   }
 }
 
-@keyframes fadeInUp {
-  0% {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-
-  100% {
-    opacity: 1;
-    transform: translateY(0);
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }

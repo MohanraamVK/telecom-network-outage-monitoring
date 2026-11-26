@@ -38,10 +38,14 @@ export function formatRelative(value, now = new Date()) {
     return "-";
   }
 
-  const minutes = Math.floor((now.getTime() - date.getTime()) / 60000);
-  if (minutes < 1) {
+  const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+  if (seconds < 10) {
     return "just now";
   }
+  if (seconds < 60) {
+    return `${seconds}s ago`;
+  }
+  const minutes = Math.floor(seconds / 60);
   return `${formatDuration(minutes)} ago`;
 }
 
